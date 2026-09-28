@@ -11,17 +11,6 @@
 #include "variables.h"
 #include "sm_rtl.h"
 
-RecompReturn GrappleFunc_AF87_M0X0(CpuState *cpu);
-RecompReturn GrappleFunc_AF87_M1X0(CpuState *cpu);
-
-RecompReturn bank_94_AF87_M0X0(CpuState *cpu) {
-  return GrappleFunc_AF87_M0X0(cpu);
-}
-
-RecompReturn bank_94_AF87_M1X0(CpuState *cpu) {
-  return GrappleFunc_AF87_M1X0(cpu);
-}
-
 /* WaitForNMI ($80:8338). The original routine raises waiting_for_nmi
  * ($7E:05B4) and spins until the NMI handler ($80:9583) clears it. In
  * the recompiled build there is no mid-frame NMI to clear it, so the
@@ -125,8 +114,10 @@ static RecompReturn HleSmJmlIndirect(CpuState *cpu, uint16 ptr_addr,
      * The old prototype called cpu_dispatch_pc_from(), whose miss path only
      * restored S and silently skipped all handler side effects. */
     cpu->PB = target_bank;
+    /* The pointer has already been resolved; interpreter entry is the
+     * handler, not the indirect-jump instruction. */
     RecompReturn r = interp_tier_dispatch_balanced(
-        cpu, target, site_pc24, cpu->S, hrv);
+        cpu, target, site_pc24, cpu->S, hrv, false);
     cpu->PB = saved_pb;
     return r;
   }
@@ -149,7 +140,7 @@ static RecompReturn HleSmJmpIndirectIndexedTail(CpuState *cpu,
   if (!cpu_dispatch_has_entry(cpu, target)) {
     (void)cpu_trace_dispatch_oob(cpu, site_pc24, target);
     return interp_tier_dispatch_balanced(
-        cpu, target, site_pc24, cpu->S, hrv);
+        cpu, target, site_pc24, cpu->S, hrv, false);
   }
   return cpu_dispatch_pc_from(cpu, target, miss_s, site_pc24);
 }

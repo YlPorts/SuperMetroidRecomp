@@ -936,6 +936,33 @@ Gaps worth fixing on their own account:
    expensive at any N; the renderer fix helped the fixed per-frame cost, not
    the multiplier.
 
+## 2026-09-28: authority coverage / Ceres Ridley return fix
+
+The owner found a hang during the opening Ridley fight in the expanded-coverage
+candidate. Turbo was in use, but a focused probe reproduces the same failure
+without turbo or the host display loop. The matching full-ROM disassembly
+documents the intentional non-local return at `$A6:CC7D` (`PLA; ...; RTS`).
+
+The shared ancestor resolver incorrectly selected the diagnostic interpreter
+scope at `$A6:CBE5` as a compiled caller. That lost the actual `$A6:CBE8` return
+PC, resumed at `$A6:CC44`, and left a saved DB byte on the stack. The next return
+entered data and then the ROM crash loop. This was exposed by promoting the
+tail helper; its instruction decode itself agrees with the disassembly.
+
+The fix is in snesrecomp: interpreter attribution scopes remain visible in
+diagnostics but are ineligible as compiled ancestor return targets. The focused
+probe using actual generated objects now matches every WRAM byte of the old
+coverage control. Controller-only gameplay reaches Ridley's real retreat and
+the self-destruct sequence without an interpreter cap or scheduler bailout.
+All existing 6,000-frame attract/basic evidence remains unchanged. No generated
+source or coverage exclusions were edited. Beads: **beads-8wg.6.10**.
+
+The separate sound-handshake discrepancy and intro APU synchronization timeout
+remain **beads-8wg.2.88**. The owner passed the corrected candidate's manual
+playtest and authorized committing it on 2026-09-28. Merge/release and permanent
+regeneration wiring remain pending. Full evidence is in the engine worktree's
+`docs/validation/disassembly-2026-09-28.md` and ignored `build/authority-study/`.
+
 ## Owner-gated (do NOT do without explicit decision)
 Merging `investigate/sm-0012-blocker` or the multi-tier branches to main;
 releasing any game; reconciling the multi-tier branches; editing `src/gen/`.
