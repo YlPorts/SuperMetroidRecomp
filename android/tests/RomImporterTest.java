@@ -27,7 +27,18 @@ public final class RomImporterTest {
         check(read[0]==RomImporter.ROM_SIZE+513,"untrusted provider is bounded");
         check(RomImporter.digest("abc".getBytes(java.nio.charset.StandardCharsets.UTF_8),0,3)
                 .equals("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"),"SHA-256 known answer");
+        if(args.length>0) {
+            byte[] rom=Files.readAllBytes(Path.of(args[0]));
+            RomImporter.importRom(new ByteArrayInputStream(rom),destination.toFile());
+            check(Files.size(destination)==RomImporter.ROM_SIZE,"valid import size");
+            check(Arrays.equals(Files.readAllBytes(destination),rom),"valid import preserves exact game bytes");
+            byte[] headered=new byte[rom.length+512];
+            Arrays.fill(headered,0,512,(byte)0x77); System.arraycopy(rom,0,headered,512,rom.length);
+            RomImporter.importRom(new ByteArrayInputStream(headered),destination.toFile());
+            check(Arrays.equals(Files.readAllBytes(destination),rom),"copier header removed without altering game");
+            System.out.println("Verified ROM: successful plain/headered imports and byte equality passed.");
+        }
         Files.delete(destination); Files.delete(folder);
-        System.out.println("ROM import: size/hash rejection, bounded reads and preservation passed; valid-game import requires the user's ROM.");
+        System.out.println("ROM import: size/hash rejection, bounded reads and preservation passed.");
     }
 }

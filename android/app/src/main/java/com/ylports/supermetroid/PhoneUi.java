@@ -18,6 +18,9 @@ final class PhoneUi {
     static final int ACCENT = Color.rgb(255, 172, 66);
     static int dp(Activity a, float value) { return Math.round(value * a.getResources().getDisplayMetrics().density); }
     static void immersive(Activity a) {
+        // PhoneWindow.getInsetsController() assumes its DecorView exists.
+        // LauncherActivity also calls this before setContentView in onCreate.
+        View decor = a.getWindow().getDecorView();
         a.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         WindowManager.LayoutParams p = a.getWindow().getAttributes();
         p.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
@@ -29,7 +32,7 @@ final class PhoneUi {
                 controller.hide(WindowInsets.Type.systemBars());
                 controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
             }
-        } else a.getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN
+        } else decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN
                 | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                 | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                 | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);

@@ -61,6 +61,8 @@ config.local.ini
 
 # Active recompiler output — generated locally per-developer (~93 MB of C)
 src/gen/
+/src/.gen.snesrecomp-staging-*/
+/src/.gen.snesrecomp-previous/
 
 # OS
 Thumbs.db

@@ -1018,3 +1018,44 @@ validates integration and packaging, not gameplay. No Super Metroid ROM was
 available for regeneration, actual-game linking, positive import or playtests;
 phone performance, visual/touch behavior, pause/resume and save/load therefore
 remain unverified. The verification APK is not a playable deliverable.
+
+
+## 2026-09-30: full Android engine generation and signed ARM64 APK
+
+The supplied Super Metroid Japan/USA image matches the pinned identity:
+3,145,728 bytes, CRC32 d63ed5f8, SHA-256
+12b77c4bc9c1832cee8881244659065ee1d84c70c3d29e6eaf92e6798cc2ca72.
+The import test now accepts an optional local image and checks a successful
+plain import and a 512-byte-header import, with exact game-byte equality.
+`build-port.sh` passes its already-verified image to that test. No ROM or
+ROM-derived generated C is committed or packaged as an APK asset.
+
+A clean generation exposed an input-order problem in the framework SDK:
+`v2_emit` reads cfg-side funcs.h for host ABI aliases, while `sdk_generate`
+only synchronizes that header after emitting. The initial emit had no header;
+the second saw it, changing aliases (including interrupt wrappers) and the
+config digest although the architecture manifest was identical. The title's
+regen script now invokes the framework's official v2_sync_funcs_h first. It
+then regenerates all banks and still synchronizes declarations afterwards.
+There are no hand edits to generated C and no copied generator implementation.
+Full generation into an empty tree followed by the strict scratch generation
+passes byte-for-byte: 22,672 roots, 14,640 emitted AOT variants, 11,116 LLE
+variants, 124 banks, 345 C translation units, about 230 MB of generated output.
+Atomic staging/previous output directories are also excluded from git.
+
+The complete engine links in both ARM64 release and x86_64 Android debug
+builds. `-PsmAbis=x86_64` is an optional emulator-test setting; ARM64 remains
+the default. ARM64 release has ENGINE_COMPILED=true, is not debuggable, is
+signed with a separate private RSA-3072 key, and contains only libSDL2.so and
+libmain.so for arm64-v8a. APK v2 signature verification and 16 KiB zip alignment
+pass; all native LOAD segments use alignment 0x4000. Lint remains 0 errors and
+66 warnings. The private key is kept outside the repository for updates.
+
+An Android 15 emulator startup caught a real Java failure before content was
+installed: PhoneWindow.getInsetsController assumes a DecorView already exists.
+PhoneUi.immersive now obtains getDecorView first, so calls from onCreate are
+safe. The updated launcher opens successfully and displays the fullscreen
+introductory system prompt. The emulator runs without KVM and suffers system
+Quickstep/System UI ANRs; these are recorded separately from app crashes.
+Device-flow validation continues below. Physical-phone performance and full
+playthrough coverage are still pending.

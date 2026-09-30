@@ -10,4 +10,4 @@ javac_bin="${JAVA_HOME:+$JAVA_HOME/bin/}javac"
     android/app/src/main/java/com/ylports/supermetroid/RomImporter.java \
     android/tests/TouchInputTest.java android/tests/RomImporterTest.java
 "$java_bin" -cp "$output" com.ylports.supermetroid.TouchInputTest
-"$java_bin" -cp "$output" com.ylports.supermetroid.RomImporterTest
+"$java_bin" -cp "$output" com.ylports.supermetroid.RomImporterTest "$@"

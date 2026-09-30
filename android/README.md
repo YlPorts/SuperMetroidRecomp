@@ -75,7 +75,22 @@ fallando explícitamente si falta `src/gen/`. No se añaden stubs de juego ni se
 sustituye la recompilación por otro emulador.
 
 La validación de importación prueba rechazo de tamaños/hashes incorrectos,
-lecturas acotadas y conservación de la ROM anterior. El caso positivo y las
-pruebas de juego completo están pendientes de la ROM correcta. También están
-pendientes una prueba visual/táctil en un teléfono y pruebas de rendimiento,
-segundo plano, restauración y partidas con el motor generado.
+lecturas acotadas y conservación de la ROM anterior. Para probar también la
+importación correcta, con y sin cabecera, pasa tu ROM a la prueba:
+
+```sh
+bash android/test-core.sh /ruta/a/SuperMetroid.sfc
+```
+
+Para una prueba en un emulador Android x86_64, después de regenerar:
+
+```sh
+cd android
+./gradlew -PsmAbis=x86_64 :app:assembleDebug
+```
+
+El APK normal usa ARM64. El caso positivo de importación, la regeneración
+completa reproducible y el enlace del juego en ambas arquitecturas se han
+verificado con la ROM fijada. El script prepara `recomp/funcs.h` antes de
+generar, ya que el emisor también lo usa para resolver los alias del host.
+Las pruebas de rendimiento y de tacto en un teléfono físico siguen pendientes.

@@ -10,7 +10,7 @@ rom_path="$(realpath "$1")"
 git submodule update --init --recursive
 bash android/fetch_sdl.sh
 bash tools/regen.sh --rom "$rom_path" --strict-idempotent
-bash android/test-core.sh
+bash android/test-core.sh "$rom_path"
 cd android
 ./gradlew :app:assembleRelease --no-daemon --max-workers=4
 echo "APK: android/app/build/outputs/apk/release/"
