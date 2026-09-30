@@ -966,3 +966,55 @@ regeneration wiring remain pending. Full evidence is in the engine worktree's
 ## Owner-gated (do NOT do without explicit decision)
 Merging `investigate/sm-0012-blocker` or the multi-tier branches to main;
 releasing any game; reconciling the multi-tier branches; editing `src/gen/`.
+
+## 2026-09-30: Android ultrawide interface and native integration
+
+Added on the separate `android-ultrawide` branch from `0da320f`. The Android
+launcher now uses the system document picker instead of requiring adb-pushed
+ROM/config files. It bounds input, removes an optional 512-byte copier header,
+verifies the game's pinned SHA-256, and replaces the previous image only after
+a successful import. Settings and saves are app-local; no ROM is packaged.
+
+An SDLActivity subclass adds a translucent, event-driven touch overlay with
+eight-way directional control, independent pointer tracking and aggregate key
+transitions. It supports simultaneous movement/shoot/jump, button sliding,
+safe release on cancellation/focus loss, position editing, size/opacity,
+optional haptics and automatic hiding with a physical controller. Android 13+
+back dispatch opens the native game menu, including on target SDK 36.
+The pinned SDL Java HID manager has a mixed USB broadcast filter registered
+without export flags. GameActivity qualifies that private filter with
+RECEIVER_NOT_EXPORTED on API 33+ to avoid the target-34+ startup exception.
+SDL remains unchanged. Lint exclusions cover only that vendored call and SDL's
+permission-gated Bluetooth code; errors in the app's own code remain fatal.
+
+Android uses the existing read-only custom renderer. Fit is enabled by default;
+the native aspect settings offer 4:3, 16:9, 21:9, 32:9 and Fit. A packed atomic
+JNI update applies settings on the SDL presentation thread. Its viewport uses
+the requested display aspect, keeping even-rounded internal pixel widths from
+causing thin borders at a phone's exact aspect. Desktop launcher wiring remains
+available in desktop builds; Android omits the desktop code-generation wizard.
+
+The toolchain is JDK 17, Gradle 8.11.1, AGP 8.10.1, SDK/Build Tools 36, NDK
+28.2.13676358 and the existing SHA-verified SDL 2.32.8 C/Java pair. Native
+libraries and APK entries were checked for 16 KiB alignment. Generated C is
+still mandatory in ordinary builds. An explicit `androidVerifyOnly=true`
+build uses the official non-playing setup host and a separate `.buildcheck`
+package; the launcher disables Play for that build. No gameplay stubs or
+alternative core were introduced.
+
+Validation: both JVM input/import suites, the existing custom video, renderer,
+Mode 7, display geometry, PPU windows, overlay composition, held-save-gesture
+tests and the five door-audio trace tests passed. The display test still had
+two obsolete 446-pixel cap expectations; corrected its 21:9 width to 448 and
+derived its maximum from the current framework constant. Added exact Fit and
+fixed 21:9 geometry checks for a 2340×1080 landscape phone panel.
+
+Java/resources/JNI/SDL/shared-runtime ARM64 packaging succeeds using the setup
+host. Android lint completes with 0 errors and 66 warnings after the scoped
+vendored exclusions above; remaining warnings include SDL and intentional
+landscape/synchronous preference persistence choices.
+Dynamic symbols include SDL_main and the Android video JNI bridge. This
+validates integration and packaging, not gameplay. No Super Metroid ROM was
+available for regeneration, actual-game linking, positive import or playtests;
+phone performance, visual/touch behavior, pause/resume and save/load therefore
+remain unverified. The verification APK is not a playable deliverable.

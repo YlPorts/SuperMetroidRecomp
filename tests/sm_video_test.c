@@ -28,6 +28,16 @@ static void geometry(void) {
   assert(SmCalculateViewport(&s, INT_MAX,1).width == 682);
   assert(SmCalculateViewport(&s, 1,INT_MAX).width == 256);
   assert(SmCalculateViewport(&s, 0,0).width == 256);
+  // A portrait phone's landscape panel: Fit fills it exactly, preserving
+  // the requested display aspect despite rounding the internal width.
+  SmViewport phone = SmCalculateViewport(&s, 2340,1080);
+  assert(phone.width == 416);
+  SmRect phone_rect = SmDestination(phone,2340,1080);
+  assert(phone_rect.x == 0 && phone_rect.y == 0);
+  assert(phone_rect.w == 2340 && phone_rect.h == 1080);
+  s.aspect = SM_ASPECT_21_9;
+  SmRect fixed_wide = SmDestination(SmCalculateViewport(&s,2340,1080),2340,1080);
+  assert(fixed_wide.w == 2340 && fixed_wide.h == 1003 && fixed_wide.y == 38);
   s.aspect = SM_ASPECT_16_9;
   SmRect r = SmDestination(SmCalculateViewport(&s, 800,600),800,600);
   assert(r.x == 0 && r.y == 75 && r.w == 800 && r.h == 450);

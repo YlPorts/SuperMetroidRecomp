@@ -9,7 +9,9 @@ SDL_SHA256="0ca83e9c9b31e18288c7ec811108e58bac1f1bb5ec6577ad386830eac51c787e"
 
 cd "$(dirname "$0")"
 if [ -f "app/jni/SDL/include/SDL_version.h" ] &&
-   grep -q "SDL_PATCHLEVEL 8" app/jni/SDL/include/SDL_version.h; then
+   grep -Eq '#define SDL_MAJOR_VERSION +2$' app/jni/SDL/include/SDL_version.h &&
+   grep -Eq '#define SDL_MINOR_VERSION +32$' app/jni/SDL/include/SDL_version.h &&
+   grep -Eq '#define SDL_PATCHLEVEL +8$' app/jni/SDL/include/SDL_version.h; then
     echo "fetch_sdl: SDL ${SDL_VERSION} already present"
     exit 0
 fi

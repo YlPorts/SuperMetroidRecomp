@@ -1,0 +1,81 @@
+# Super Metroid Recomp · Android
+
+Port de la base `0da320f`, con el motor y el renderizador ultrawide del proyecto.
+La interfaz del teléfono y los controles se implementan en Java; la ejecución
+del juego, audio y gráficos siguen en el motor C compartido. No se incluyen ROMs.
+
+## Uso
+
+1. Abre la app; se orienta en horizontal automáticamente.
+2. **Elegir ROM** abre el selector de archivos de Android. Importa Super Metroid
+   (Japan, USA), original, en `.sfc` o `.smc`. Se admite cabecera de 512 bytes;
+   se elimina y se comprueba el SHA-256 antes de guardar. No elijas un ZIP.
+3. **Jugar**. El modo inicial ajusta el escenario al ancho del teléfono.
+4. El botón **≡** abre guardar/cargar estado rápido, pantalla, controles y salida.
+
+La pantalla ofrece 4:3, 16:9, 21:9, 32:9 y ajuste a la pantalla. El renderizador
+del repositorio dibuja los márgenes; no se estira el raster original. El HUD
+puede situarse en los extremos. Algunas pantallas y salas conservan limitaciones
+del renderizador experimental del proyecto original.
+
+Cruceta de ocho direcciones con zona muerta; B saltar, Y disparar, A correr,
+X seleccionar arma, L/R apuntar, Select y Start. Los nombres describen el mapa
+predeterminado del juego; si lo cambias dentro del juego, sus funciones cambian.
+Se puede caminar, disparar y saltar a la vez. Cada dedo se identifica por su ID;
+soltar uno no libera lo que mantiene otro. Se sueltan las teclas al cancelar un
+gesto, abrir el menú o salir de la app. Hay tamaño, opacidad, vibración opcional
+y editor de posición. Se ocultan los controles con mando físico y reaparecen
+al desconectarlo; el menú queda disponible.
+
+Los archivos y partidas se conservan dentro de la app entre actualizaciones.
+Salir desde el menú permite al motor guardar su SRAM y cerrar. Desinstalar o
+borrar los datos elimina las partidas. La app no solicita acceso a toda la
+memoria ni permisos de Internet.
+
+## Compilar el juego
+
+JDK 17, Android SDK 36, Build Tools 36.0.0, NDK 28.2.13676358, CMake y Ninja
+en PATH. Para la regeneración utiliza las dependencias Python/Rust descritas
+por `snesrecomp`; conserva los commits fijados de los submódulos.
+
+```sh
+export ANDROID_HOME=/ruta/al/android-sdk
+export JAVA_HOME=/ruta/al/jdk-17
+# Firma propia y estable: no guardes las contraseñas en el repositorio.
+export SM_ANDROID_KEYSTORE=/ruta/privada/supermetroid.jks
+export SM_ANDROID_STORE_PASSWORD=...
+export SM_ANDROID_KEY_ALIAS=supermetroid
+export SM_ANDROID_KEY_PASSWORD=...
+bash android/build-port.sh /ruta/a/SuperMetroid.sfc
+```
+
+`build-port.sh` verifica la ROM, genera todos los bancos dos veces y exige
+salida idéntica, prueba los controles y compila `assembleRelease`. Sin firma
+configurada el resultado es `app-release-unsigned.apk`. Para desarrollo:
+regenera primero y después ejecuta `cd android && ./gradlew assembleDebug`.
+
+La arquitectura inicial es ARM64, Android 9 o posterior. Se usa SDL 2.32.8
+verificado por SHA-256, con su Java correspondiente. NDK 28 y el enlace de
+16 KiB preparan las bibliotecas para dispositivos de páginas grandes.
+No hay promesa de 60 fps en un teléfono sin probar el juego allí.
+
+## Verificación sin ROM
+
+```sh
+bash android/test-core.sh
+cd android
+./gradlew -PandroidVerifyOnly=true :app:assembleDebug
+```
+
+La segunda orden verifica Java, recursos, JNI, SDL y el motor compartido usando
+el setup host oficial, que **no ejecuta el juego**. Tiene un paquete separado
+`com.ylports.supermetroid.buildcheck`; el botón Jugar queda deshabilitado.
+**No entregar este APK como port jugable**. La compilación normal continúa
+fallando explícitamente si falta `src/gen/`. No se añaden stubs de juego ni se
+sustituye la recompilación por otro emulador.
+
+La validación de importación prueba rechazo de tamaños/hashes incorrectos,
+lecturas acotadas y conservación de la ROM anterior. El caso positivo y las
+pruebas de juego completo están pendientes de la ROM correcta. También están
+pendientes una prueba visual/táctil en un teléfono y pruebas de rendimiento,
+segundo plano, restauración y partidas con el motor generado.

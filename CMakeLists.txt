@@ -170,13 +170,18 @@ set(SM_HOST_SOURCES
     src/sm_mode7.c        # SM's mode-7 object projection
     src/sm_display.c      # SM presentation geometry
     src/sm_video.c        # SM aspect/HUD policy + presentation clock
-    src/sm_mods.c         # built-in presentation mod provider
 )
+
+if(NOT ANDROID)
+    list(APPEND SM_HOST_SOURCES src/sm_mods.c)
+endif()
 
 if(ANDROID)
     # SDLActivity loads "libmain.so" and calls its SDL_main.
     add_library(SuperMetroidSNESRecomp SHARED ${SM_HOST_SOURCES})
     set_target_properties(SuperMetroidSNESRecomp PROPERTIES OUTPUT_NAME main)
+    target_sources(SuperMetroidSNESRecomp PRIVATE src/platform/android/android_video.c)
+    target_link_options(SuperMetroidSNESRecomp PRIVATE "-Wl,-z,max-page-size=16384")
 else()
     add_executable(SuperMetroidSNESRecomp ${SM_HOST_SOURCES})
 endif()
@@ -301,16 +306,20 @@ endif()
 # CONSOLE is required by recomp-ui: it selects exactly one validated
 # assets/consoles/<id>/ manifest, so an SNES game cannot silently stage N64
 # cartridge or NES pad art next to the exe.
-recomp_target_launcher_ui(SuperMetroidSNESRecomp
-    CONSOLE snes
-    BOXART ${CMAKE_CURRENT_SOURCE_DIR}/recomp/launcher/boxart.tga)
+if(NOT ANDROID)
+    recomp_target_launcher_ui(SuperMetroidSNESRecomp
+        CONSOLE snes
+        BOXART ${CMAKE_CURRENT_SOURCE_DIR}/recomp/launcher/boxart.tga)
+endif()
 
 # Generate & rebuild from inside the launcher: pick ROM -> recompile locally
 # -> cmake --build -> relaunch. The implementation is the framework's and the
 # host wires it (snesrecomp_codegen_host_autowire); this project contributes
 # no configuration.
-target_sources(SuperMetroidSNESRecomp PRIVATE
-    ${SNESRECOMP_ROOT}/host/snesrecomp_codegen_host.c)
+if(NOT ANDROID)
+    target_sources(SuperMetroidSNESRecomp PRIVATE
+        ${SNESRECOMP_ROOT}/host/snesrecomp_codegen_host.c)
+endif()
 target_include_directories(SuperMetroidSNESRecomp PRIVATE
     ${SNESRECOMP_ROOT}/host
     ${RECOMP_UI_ROOT}/src)

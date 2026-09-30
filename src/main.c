@@ -47,6 +47,9 @@
 #include "sm_renderer.h"
 #include "sm_video.h"
 #include "sm_spc_player.h"
+#ifdef __ANDROID__
+#include "platform/android/android_video.h"
+#endif
 #if defined(RECOMP_LAUNCHER)
 #include "sm_mods.h"
 #endif
@@ -111,9 +114,20 @@ static int SmKeepPacingDebt(void) {
 }
 
 static void SmPrepareFrame(int drawable_w, int drawable_h, int *frame_w, int *frame_h) {
+#ifdef __ANDROID__
+  SmAndroidApplyVideo(&g_sm_video);
+#endif
   g_sm_viewport = SmCalculateViewport(&g_sm_video, drawable_w, drawable_h);
   *frame_w = g_sm_viewport.width;
   *frame_h = SM_HEIGHT;
+}
+
+static void SmComputeViewport(int frame_w, int frame_h, int w, int h,
+                               SnesDisplayViewport *out) {
+  (void)frame_w;
+  (void)frame_h;
+  SmRect rect = SmDestination(g_sm_viewport, w, h);
+  *out = (SnesDisplayViewport){rect.x, rect.y, rect.w, rect.h};
 }
 
 /* Simulation owns these: the renderer's per-frame capture runs exactly once
@@ -241,6 +255,9 @@ static const SnesDesktopHostGame kSuperMetroidHost = {
   .presentation_hz = &SmPresentationHzHook,
   .window_base_width = &SmDisplay_GetWindowBaseWidth,
   .window_base_height = &SmDisplay_GetWindowBaseHeight,
+#ifdef __ANDROID__
+  .compute_viewport = &SmComputeViewport,
+#endif
 };
 
 #ifndef __ANDROID__
