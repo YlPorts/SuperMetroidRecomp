@@ -93,4 +93,7 @@ El APK normal usa ARM64. El caso positivo de importación, la regeneración
 completa reproducible y el enlace del juego en ambas arquitecturas se han
 verificado con la ROM fijada. El script prepara `recomp/funcs.h` antes de
 generar, ya que el emisor también lo usa para resolver los alias del host.
-Las pruebas de rendimiento y de tacto en un teléfono físico siguen pendientes.
+En Android 15 se comprobó el selector de ROM, el título, una escena en
+ultrawide, el menú táctil y la creación del estado rápido. Es una prueba de
+arranque; falta una partida completa y validar estados en distintas salas.
+Las pruebas de rendimiento, audio y tacto en un teléfono físico siguen pendientes.

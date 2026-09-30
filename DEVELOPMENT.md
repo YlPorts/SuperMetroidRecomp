@@ -1059,3 +1059,19 @@ introductory system prompt. The emulator runs without KVM and suffers system
 Quickstep/System UI ANRs; these are recorded separately from app crashes.
 Device-flow validation continues below. Physical-phone performance and full
 playthrough coverage are still pending.
+
+
+Final device-flow evidence (same Android 15 x86_64 debug build with the real
+engine): the system OPEN_DOCUMENT picker listed SuperMetroid.sfc; selecting
+it enabled Play and displayed `ROM lista · Tu pantalla`. Play entered the
+isolated :game activity, loaded SDL2/main, started SDL_main and reached the
+Super Metroid title. A later rainy Crateria ship scene rendered across the
+full 780×360 display, with the HUD at the edges and all touch controls visible.
+The touch menu opened, saving created saves/save0.sav (305,602 bytes), and an
+issued load was followed by further scene rendering. This is a smoke test,
+not proof of file-state correctness across arbitrary coroutine positions.
+No fresh app crash appeared in the crash log. Emulator guest time is slow and
+brief input taps can be consumed between simulated frames; a physical-phone
+multitouch/latency session is still needed. No performance claims follow from
+this virtual device. The signed ARM64 APK is the release deliverable; the
+x86_64 debug APK remains a test artifact only.
