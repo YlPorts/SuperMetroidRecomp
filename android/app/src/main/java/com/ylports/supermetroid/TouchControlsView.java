@@ -19,10 +19,10 @@ final class TouchControlsView extends View {
     interface Host { void keys(int pressed, int released); void menu(); void editDone(); }
     private static final int PAD = -1, MENU = -2;
     private static final class Control {
-        final String id, title, subtitle; final int mask; final float defaultX, defaultY, factor;
+        final String id; final int mask; final float defaultX, defaultY, factor;
         float x, y, radius;
-        Control(String id, String title, String subtitle, int mask, float x, float y, float factor) {
-            this.id=id; this.title=title; this.subtitle=subtitle; this.mask=mask;
+        Control(String id, int mask, float x, float y, float factor) {
+            this.id=id; this.mask=mask;
             defaultX=x; defaultY=y; this.factor=factor;
         }
     }
@@ -36,6 +36,8 @@ final class TouchControlsView extends View {
     private final Map<Integer, Control> owners = new HashMap<>();
     private int padPointer = -1;
     private boolean editing, hidden;
+    private int controlAlpha;
+    private boolean vibration;
     private Control dragged;
     private int dragPointer = -1;
     private float dragDx, dragDy, safeLeft, safeTop, safeRight, safeBottom;
@@ -46,19 +48,19 @@ final class TouchControlsView extends View {
         setFocusable(false);
         input = new TouchInput((pressed, released) -> {
             host.keys(pressed, released);
-            if (pressed != 0 && settings.vibration()) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+            if (pressed != 0 && vibration) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
             invalidate();
         });
-        controls.add(new Control("pad", "", "", PAD, .115f, .72f, 2.05f));
-        controls.add(new Control("b", "B", "SALTAR", TouchInput.B, .875f, .84f, 1.12f));
-        controls.add(new Control("y", "Y", "DISPARAR", TouchInput.Y, .795f, .66f, 1.12f));
-        controls.add(new Control("a", "A", "CORRER", TouchInput.A, .953f, .66f, .92f));
-        controls.add(new Control("x", "X", "ARMA", TouchInput.X, .875f, .475f, .92f));
-        controls.add(new Control("l", "L", "APUNTAR", TouchInput.L, .12f, .32f, .88f));
-        controls.add(new Control("r", "R", "APUNTAR", TouchInput.R, .92f, .29f, .88f));
-        controls.add(new Control("select", "SEL", "", TouchInput.SELECT, .43f, .88f, .76f));
-        controls.add(new Control("start", "START", "", TouchInput.START, .55f, .88f, .76f));
-        controls.add(new Control("menu", "≡", "", MENU, .50f, .115f, .72f));
+        controls.add(new Control("pad", PAD, .115f, .72f, 2.05f));
+        controls.add(new Control("b", TouchInput.B, .875f, .84f, 1.16f));
+        controls.add(new Control("y", TouchInput.Y, .795f, .66f, 1.16f));
+        controls.add(new Control("a", TouchInput.A, .953f, .66f, .92f));
+        controls.add(new Control("x", TouchInput.X, .875f, .475f, .92f));
+        controls.add(new Control("l", TouchInput.L, .12f, .32f, .88f));
+        controls.add(new Control("r", TouchInput.R, .92f, .29f, .88f));
+        controls.add(new Control("select", TouchInput.SELECT, .43f, .88f, .76f));
+        controls.add(new Control("start", TouchInput.START, .55f, .88f, .76f));
+        controls.add(new Control("menu", MENU, .50f, .115f, .72f));
         setOnApplyWindowInsetsListener((v, insets) -> {
             safeLeft=safeTop=safeRight=safeBottom=0;
             if (insets.getDisplayCutout()!=null) {
@@ -84,6 +86,8 @@ final class TouchControlsView extends View {
     private float density() { return getResources().getDisplayMetrics().density; }
     private static float clamp(float n,float min,float max) { return Math.max(min,Math.min(max,n)); }
     private void layoutControls() {
+        controlAlpha=Math.round(settings.opacity()*2.55f);
+        vibration=settings.vibration();
         float edge=8*density();
         usable.set(safeLeft+edge,safeTop+edge,getWidth()-safeRight-edge,getHeight()-safeBottom-edge);
         if (usable.width()<=0 || usable.height()<=0) return;
@@ -167,39 +171,88 @@ final class TouchControlsView extends View {
         if(editing) {
             canvas.drawColor(0x85070B10);
             paint.setColor(Color.WHITE); paint.setTextSize(14*density()); paint.setTextAlign(Paint.Align.CENTER);
-            canvas.drawText("Arrastra los botones · toca LISTO para jugar",getWidth()*.5f,getHeight()*.25f,paint);
+            canvas.drawText("Arrastra los botones · toca ✓ para jugar",getWidth()*.5f,getHeight()*.25f,paint);
         }
         for(Control c:controls) {
             if(hidden&&!editing&&c.mask!=MENU) continue;
             if(c.mask==PAD) { drawPad(canvas,c); continue; }
             boolean pressed=c.mask>0&&(input.held()&c.mask)!=0;
-            int alpha=editing?210:Math.round(settings.opacity()*2.55f);
-            paint.setStyle(Paint.Style.FILL); paint.setColor(pressed?0xFFFFAC42:0xFF0C1825); paint.setAlpha(pressed?210:alpha);
+            int alpha=editing?210:controlAlpha;
+            paint.setStyle(Paint.Style.FILL); paint.setColor(pressed?0xFFFFAC42:0xFF09121C); paint.setAlpha(pressed?205:Math.round(alpha*.58f));
             canvas.drawCircle(c.x,c.y,c.radius,paint);
-            paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(1.4f*density());
+            paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth((pressed?2.4f:1.5f)*density());
             paint.setColor(pressed?0xFFFFC976:0xFFD9E5EF); paint.setAlpha(Math.min(255,alpha+45));
             canvas.drawCircle(c.x,c.y,c.radius,paint);
-            paint.setStyle(Paint.Style.FILL); paint.setTextAlign(Paint.Align.CENTER);
+            paint.setStrokeWidth(2.4f*density()); paint.setStrokeCap(Paint.Cap.ROUND); paint.setStrokeJoin(Paint.Join.ROUND);
             paint.setColor(pressed?0xFF0C1019:Color.WHITE); paint.setAlpha(Math.min(255,alpha+65));
-            paint.setTextSize((c.mask==MENU&&editing?10:c.title.length()>1?11:19)*density());
-            float baseline=c.subtitle.isEmpty()?c.y-paint.getFontMetrics().ascent*.34f:c.y;
-            canvas.drawText(c.mask==MENU&&editing?"LISTO":c.title,c.x,baseline,paint);
-            if(!c.subtitle.isEmpty()) {
-                paint.setTextSize(7.5f*density()); canvas.drawText(c.subtitle,c.x,c.y+13*density(),paint);
-            }
+            drawIcon(canvas,c);
+            paint.setStrokeCap(Paint.Cap.BUTT); paint.setStyle(Paint.Style.FILL);
         }
+    }
+    /** Resolution-independent strokes; no text, font lookup, bitmap or per-frame allocation. */
+    private void drawIcon(Canvas canvas,Control c) {
+        canvas.save(); canvas.translate(c.x,c.y);
+        float r=c.radius*.45f;
+        path.reset();
+        if(c.mask==MENU) {
+            if(editing) {
+                path.moveTo(-r*.8f,0); path.lineTo(-r*.2f,r*.6f); path.lineTo(r,-r*.65f);
+            } else {
+                for(int i=-1;i<=1;i++) { path.moveTo(-r,i*r*.7f); path.lineTo(r,i*r*.7f); }
+            }
+        } else if(c.mask==TouchInput.B) {
+            // Jump: upwards arrow with a launch arc.
+            path.moveTo(0,r*.25f); path.lineTo(0,-r);
+            path.moveTo(-r*.6f,-r*.4f); path.lineTo(0,-r); path.lineTo(r*.6f,-r*.4f);
+            path.moveTo(-r*.85f,r*.8f); path.quadTo(0,r*.25f,r*.85f,r*.8f);
+        } else if(c.mask==TouchInput.Y) {
+            // Fire: reticle.
+            canvas.drawCircle(0,0,r*.62f,paint);
+            for(int i=0;i<4;i++) {
+                canvas.save(); canvas.rotate(i*90);
+                canvas.drawLine(0,-r,0,-r*.7f,paint); canvas.restore();
+            }
+            paint.setStyle(Paint.Style.FILL); canvas.drawCircle(0,0,r*.14f,paint); paint.setStyle(Paint.Style.STROKE);
+        } else if(c.mask==TouchInput.A) {
+            // Run: two forward chevrons.
+            for(int i=0;i<2;i++) {
+                float x=(-.8f+i*.95f)*r;
+                path.moveTo(x,-r*.65f); path.lineTo(x+r*.6f,0); path.lineTo(x,r*.65f);
+            }
+        } else if(c.mask==TouchInput.X) {
+            // Weapon selection: missile silhouette.
+            canvas.rotate(40);
+            path.moveTo(0,-r); path.quadTo(-r*.45f,-r*.7f,-r*.35f,r*.4f);
+            path.lineTo(r*.35f,r*.4f); path.quadTo(r*.45f,-r*.7f,0,-r);
+            path.moveTo(-r*.35f,0); path.lineTo(-r*.7f,r*.6f); path.lineTo(-r*.35f,r*.4f);
+            path.moveTo(r*.35f,0); path.lineTo(r*.7f,r*.6f); path.lineTo(r*.35f,r*.4f);
+            path.moveTo(0,r*.6f); path.lineTo(0,r);
+        } else if(c.mask==TouchInput.L || c.mask==TouchInput.R) {
+            // Aim: angled sight. Opposite strokes distinguish both shoulders.
+            if(c.mask==TouchInput.R) canvas.scale(1,-1);
+            path.moveTo(-r*.8f,r*.8f); path.lineTo(r*.8f,-r*.8f);
+            path.moveTo(-r*.1f,-r*.8f); path.lineTo(r*.8f,-r*.8f); path.lineTo(r*.8f,r*.1f);
+            path.moveTo(-r*.85f,-r*.15f); path.lineTo(-r*.85f,-r*.85f); path.lineTo(-r*.15f,-r*.85f);
+        } else if(c.mask==TouchInput.START) {
+            canvas.drawLine(-r*.4f,-r*.8f,-r*.4f,r*.8f,paint);
+            canvas.drawLine(r*.4f,-r*.8f,r*.4f,r*.8f,paint);
+        } else if(c.mask==TouchInput.SELECT) {
+            canvas.drawRoundRect(-r,-r*.8f,r*.45f,r*.4f,r*.18f,r*.18f,paint);
+            path.moveTo(-r*.4f,r*.75f); path.lineTo(r*.9f,r*.75f); path.lineTo(r*.9f,-r*.4f);
+        }
+        canvas.drawPath(path,paint); canvas.restore();
     }
     private void drawPad(Canvas canvas,Control c) {
         float r=c.radius, arm=r*.35f;
         paint.setStyle(Paint.Style.FILL); paint.setColor(0xFF0C1825);
-        paint.setAlpha(editing?210:Math.round(settings.opacity()*2.55f));
+        paint.setAlpha(editing?210:Math.round(controlAlpha*.65f));
         canvas.drawRoundRect(c.x-arm,c.y-r,c.x+arm,c.y+r,arm*.3f,arm*.3f,paint);
         canvas.drawRoundRect(c.x-r,c.y-arm,c.x+r,c.y+arm,arm*.3f,arm*.3f,paint);
         int[] bits={TouchInput.UP,TouchInput.RIGHT,TouchInput.DOWN,TouchInput.LEFT};
         for(int i=0;i<4;i++) {
             canvas.save(); canvas.rotate(i*90,c.x,c.y);
             paint.setColor((input.held()&bits[i])!=0?PhoneUi.ACCENT:Color.WHITE);
-            paint.setAlpha(editing?230:Math.min(255,Math.round(settings.opacity()*2.55f)+55));
+            paint.setAlpha(editing?230:Math.min(255,controlAlpha+55));
             path.reset(); path.moveTo(c.x,c.y-r*.82f); path.lineTo(c.x-r*.20f,c.y-r*.50f);
             path.lineTo(c.x+r*.20f,c.y-r*.50f); path.close(); canvas.drawPath(path,paint);
             canvas.restore();

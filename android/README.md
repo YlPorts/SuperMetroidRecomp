@@ -97,3 +97,24 @@ En Android 15 se comprobó el selector de ROM, el título, una escena en
 ultrawide, el menú táctil y la creación del estado rápido. Es una prueba de
 arranque; falta una partida completa y validar estados en distintas salas.
 Las pruebas de rendimiento, audio y tacto en un teléfono físico siguen pendientes.
+## Alpha2: audio y controles
+
+La actualización `0.1.0-alpha2` se compila con `assembleRelease`, versión 2 y
+la misma firma que alpha1. Puede instalarse encima conservando ROM, partidas
+y posiciones de los controles. La APK entregada es ARM64 y no es depurable.
+
+Se eliminó la espera duplicada de presentación y se recuperan retrasos cortos
+de planificación para alimentar el audio. Se prefiere AAudio, con fallback de
+SDL, salida estéreo a 48 kHz y un bloque de dispositivo de 2.048 muestras.
+El renderer ultrawide reutiliza la VRAM inmutable entre líneas hasta que la
+PPU registra una escritura. No cambia el reloj ni el estado de la consola.
+
+Los botones usan símbolos vectoriales: flecha de salto, mira para disparar,
+doble flecha de carrera, proyectil para cambiar arma, miras diagonales,
+pausa, selector y menú. No contienen letras ni nombres. Se conservan el
+multitáctil, deslizamiento, tamaño, opacidad y posiciones guardadas.
+
+Pruebas: captura de 1.000 cuadros de 1.257 a 22 ms (solo esa etapa); ocho
+escenas y una captura anterior conservan sus píxeles. Un replay sintético
+de 3.000 cuadros con el consumidor de audio real pasa de 56 vaciados a 0.
+Esto no mide FPS ni reproducción audible en un teléfono físico.

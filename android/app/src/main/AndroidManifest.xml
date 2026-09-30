@@ -8,6 +8,7 @@
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
     <application
+        android:appCategory="game"
         android:label="Super Metroid Recomp"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"

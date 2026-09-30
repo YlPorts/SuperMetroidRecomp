@@ -242,11 +242,12 @@ int main(int argc, char **argv) {
   BeginFixtureFrame(ram, 2);
   for (unsigned y = 1; y <= 224; ++y) {
     if (y == 101) ppu.cgram[1] = 31 << 5;
-    if (y == 151) memset(ppu.vram, 0, sizeof(ppu.vram));
+    if (y == 151) { memset(ppu.vram, 0, sizeof(ppu.vram)); ++ppu.vramWriteCount; }
     SmRendererCaptureLine(&ppu, y);
   }
   assert(SmRendererEndFrame(stock));
   memset(&ppu, 0, sizeof(ppu));
+  assert(SmRendererVramCopies() == 2); /* One upload mid-frame, not 224 copies. */
   memset(ram, 0, sizeof(ram));
   assert(SmRendererDraw(output, view, true, 1));
   assert(output[50 * view.width + view.extra] == 0xff0000);

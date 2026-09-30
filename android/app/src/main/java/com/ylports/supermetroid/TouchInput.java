@@ -16,11 +16,13 @@ public final class TouchInput {
     public TouchInput(Listener listener) { this.listener = listener; }
     public int held() { return held; }
     public void pointer(int id, int mask) {
+        Integer previous = pointers.get(id);
+        if ((previous == null ? 0 : previous) == mask) return;
         if (mask == 0) pointers.remove(id); else pointers.put(id, mask);
         publish();
     }
-    public void release(int id) { pointers.remove(id); publish(); }
-    public void clear() { pointers.clear(); publish(); }
+    public void release(int id) { if (pointers.remove(id) != null) publish(); }
+    public void clear() { if (!pointers.isEmpty()) { pointers.clear(); publish(); } }
     private void publish() {
         int next = 0;
         for (int mask : pointers.values()) next |= mask;

@@ -46,6 +46,8 @@ public final class GameActivity extends SDLActivity implements TouchControlsView
         super.onCreate(state);
         if(mBrokenLibraries) return;
         PhoneUi.immersive(this);
+        android.view.WindowManager.LayoutParams window=getWindow().getAttributes();
+        window.preferredRefreshRate=60f; getWindow().setAttributes(window);
         controls=new TouchControlsView(this,settings,this);
         mLayout.addView(controls,new RelativeLayout.LayoutParams(-1,-1));
         controls.requestApplyInsets();

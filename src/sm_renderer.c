@@ -4,13 +4,14 @@
 #include <math.h>
 #include <stddef.h>
 
-/* Immutable host snapshots. Presenting never invokes guest code or writes PPU,
- * WRAM, VRAM or OAM. Each visible line owns its memory image so raster DMA
- * cannot retroactively change an earlier line. */
+/* Immutable host snapshots. Lines share a VRAM image until the PPU's host
+ * write revision changes; a mid-frame upload still owns a new image. Keep
+ * line metadata compact and the ordinary unchanged tiles in the CPU cache. */
 typedef struct SmRasterLine {
   uint8_t registers[PPU_SAVESTATE_REGS_SIZE];
-  uint16_t palette[256], oam[256], vram[0x8000];
+  uint16_t palette[256], oam[256];
   uint8_t high_oam[32];
+  const uint16_t *vram;
 } SmRasterLine;
 typedef struct SmSourceFrame {
   SmRasterLine lines[224];
@@ -22,6 +23,11 @@ typedef struct SmSourceFrame {
   bool object_state_valid;
 } SmSourceFrame;
 static SmSourceFrame frames[2];
+/* Worst-case space is bounded even if DMA changes tiles on every line. */
+static uint16_t vram_images[2][224][0x8000];
+static unsigned vram_copies[2];
+static uint32_t last_vram_revision[2];
+static const Ppu *last_vram_owner[2];
 static unsigned current;
 static Ppu scanout;
 static const uint8_t *renderer_rom;
@@ -62,13 +68,49 @@ static const uint8_t *rom_bytes(unsigned bank, unsigned address, size_t size) {
   return renderer_rom + offset;
 }
 
+/* Preserve the pointer-free v1/v2 diagnostic format. It is deliberately
+ * expanded only for explicit captures, never for ordinary gameplay. */
+typedef struct SmCaptureLine {
+  uint8_t registers[PPU_SAVESTATE_REGS_SIZE];
+  uint16_t palette[256], oam[256], vram[0x8000];
+  uint8_t high_oam[32];
+} SmCaptureLine;
+typedef struct SmCaptureFrame {
+  SmCaptureLine lines[224];
+  uint8_t ram[0x20000];
+  uint32_t stock[256 * 224];
+  unsigned number, captured;
+  bool valid;
+  uint8_t object_ram[0x20000];
+  bool object_state_valid;
+} SmCaptureFrame;
+
 static bool save_capture(const SmSourceFrame *frame, const char *path) {
   if (!path || !frame->valid) return false;
+  SmCaptureFrame *capture = calloc(1, sizeof(*capture));
+  if (!capture) return false;
+  for (unsigned y = 0; y < 224; ++y) {
+    const SmRasterLine *line = &frame->lines[y];
+    SmCaptureLine *out = &capture->lines[y];
+    memcpy(out->registers, line->registers, sizeof(out->registers));
+    memcpy(out->palette, line->palette, sizeof(out->palette));
+    memcpy(out->oam, line->oam, sizeof(out->oam));
+    memcpy(out->high_oam, line->high_oam, sizeof(out->high_oam));
+    memcpy(out->vram, line->vram, sizeof(out->vram));
+  }
+  memcpy(capture->ram, frame->ram, sizeof(capture->ram));
+  memcpy(capture->stock, frame->stock, sizeof(capture->stock));
+  memcpy(capture->object_ram, frame->object_ram, sizeof(capture->object_ram));
+  capture->number = frame->number;
+  capture->captured = frame->captured;
+  capture->valid = frame->valid;
+  capture->object_state_valid = frame->object_state_valid;
   FILE *file = fopen(path, "wb");
-  if (!file) return false;
-  const uint32_t header[3] = {0x534d5243, 2, sizeof(SmSourceFrame)};
+  if (!file) { free(capture); return false; }
+  const uint32_t header[3] = {0x534d5243, 2, sizeof(*capture)};
   bool ok = fwrite(header, sizeof(header), 1, file) == 1 &&
-            fwrite(frame, sizeof(SmSourceFrame), 1, file) == 1;
+            fwrite(capture, sizeof(*capture), 1, file) == 1;
+  free(capture);
   return fclose(file) == 0 && ok;
 }
 bool SmRendererSaveCapture(const char *path) {
@@ -80,20 +122,48 @@ bool SmRendererLoadCapture(const char *path) {
   if (!file) return false;
   uint32_t header[3];
   SmSourceFrame *next = &frames[current ^ 1];
-  const size_t v1_size = (offsetof(SmSourceFrame, object_ram) + 3) & ~(size_t)3;
+  SmCaptureFrame *capture = calloc(1, sizeof(*capture));
+  if (!capture) { fclose(file); return false; }
+  const size_t v1_size = (offsetof(SmCaptureFrame, object_ram) + 3) & ~(size_t)3;
   bool ok = fread(header, sizeof(header), 1, file) == 1 &&
             header[0] == 0x534d5243 &&
             ((header[1] == 1 && header[2] == v1_size) ||
-             (header[1] == 2 && header[2] == sizeof(*next))) &&
-            fread(next, header[2], 1, file) == 1 &&
-            next->valid && next->captured == 224 && fgetc(file) == EOF;
+             (header[1] == 2 && header[2] == sizeof(*capture))) &&
+            fread(capture, header[2], 1, file) == 1 &&
+            capture->valid && capture->captured == 224 && fgetc(file) == EOF;
   fclose(file);
   if (ok && header[1] == 1) {
     /* Legacy captures did not retain pre-NMI owner state. Replay discrete
      * objects for inspection, but do not claim trustworthy interpolation. */
-    memcpy(next->object_ram, next->ram, sizeof(next->object_ram));
-    next->object_state_valid = false;
+    memcpy(capture->object_ram, capture->ram, sizeof(capture->object_ram));
+    capture->object_state_valid = false;
   }
+  if (ok) {
+    unsigned target = current ^ 1;
+    vram_copies[target] = 0;
+    for (unsigned y = 0; y < 224; ++y) {
+      const SmCaptureLine *in = &capture->lines[y];
+      SmRasterLine *line = &next->lines[y];
+      memcpy(line->registers, in->registers, sizeof(line->registers));
+      memcpy(line->palette, in->palette, sizeof(line->palette));
+      memcpy(line->oam, in->oam, sizeof(line->oam));
+      memcpy(line->high_oam, in->high_oam, sizeof(line->high_oam));
+      unsigned count = vram_copies[target];
+      if (!count || memcmp(vram_images[target][count - 1], in->vram, sizeof(in->vram))) {
+        memcpy(vram_images[target][count], in->vram, sizeof(in->vram));
+        ++vram_copies[target];
+      }
+      line->vram = vram_images[target][vram_copies[target] - 1];
+    }
+    memcpy(next->ram, capture->ram, sizeof(next->ram));
+    memcpy(next->stock, capture->stock, sizeof(next->stock));
+    memcpy(next->object_ram, capture->object_ram, sizeof(next->object_ram));
+    next->number = capture->number;
+    next->captured = capture->captured;
+    next->valid = capture->valid;
+    next->object_state_valid = capture->object_state_valid;
+  }
+  free(capture);
   if (ok) current ^= 1;
   else next->valid = false;
   return ok;
@@ -260,6 +330,8 @@ static bool has_samus_motion(const SmSourceFrame *f, const SmSourceFrame *old) {
 }
 void SmRendererReset(void) {
   memset(frames, 0, sizeof(frames));
+  memset(vram_copies, 0, sizeof(vram_copies));
+  memset(last_vram_owner, 0, sizeof(last_vram_owner));
   current = 0;
   captured_mode7 = false;
   captured_mosaic = false;
@@ -278,6 +350,8 @@ void SmRendererBeginFrame(const uint8_t ram[0x20000], unsigned number) {
   SmSourceFrame *f = &frames[current];
   f->valid = false;
   f->captured = 0;
+  vram_copies[current] = 0;
+  last_vram_owner[current] = NULL;
   f->number = number;
   memcpy(f->ram, ram, sizeof(f->ram));
   memcpy(f->object_ram, object_state_latched ? latched_object_ram : ram, sizeof(f->object_ram));
@@ -295,9 +369,16 @@ void SmRendererCaptureLine(const Ppu *p, unsigned line) {
   memcpy(l->palette, p->cgram, sizeof(l->palette));
   memcpy(l->oam, p->oam, sizeof(l->oam));
   memcpy(l->high_oam, p->highOam, sizeof(l->high_oam));
-  memcpy(l->vram, p->vram, sizeof(l->vram));
+  if (!vram_copies[current] || last_vram_owner[current] != p ||
+      last_vram_revision[current] != p->vramWriteCount) {
+    memcpy(vram_images[current][vram_copies[current]++], p->vram, sizeof(p->vram));
+    last_vram_owner[current] = p;
+    last_vram_revision[current] = p->vramWriteCount;
+  }
+  l->vram = vram_images[current][vram_copies[current] - 1];
   ++f->captured;
 }
+unsigned SmRendererVramCopies(void) { return vram_copies[current]; }
 bool SmRendererEndFrame(const uint32_t stock[256 * 224]) {
   SmSourceFrame *f = &frames[current];
   if (!stock || f->captured != 224) return false;

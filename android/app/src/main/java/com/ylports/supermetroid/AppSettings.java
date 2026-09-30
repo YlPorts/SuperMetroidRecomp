@@ -39,9 +39,9 @@ final class AppSettings {
         // Seed once. Subsequent launches keep the engine's saved settings.
         if (!new File(directory(), "config.ini").isFile()) write("config.ini",
                 "[General]\nSkipLauncher=1\nRunAhead=0\nAutosave=0\nDisableFrameDelay=0\n"
-                + "[Graphics]\nRenderer=opengles2\nVSync=1\nNewRenderer=1\nNoSpriteLimits=1\n"
+                + "[Graphics]\nRenderer=opengles2\nVSync=0\nNewRenderer=1\nNoSpriteLimits=1\n"
                 + "IgnoreAspectRatio=0\nFullscreen=1\nFrameBlend=0\n"
-                + "[Sound]\nVolume=100\nEnableAudio=1\nAudioFreq=48000\nAudioChannels=2\nAudioSamples=1024\n"
+                + "[Sound]\nVolume=100\nEnableAudio=1\nAudioFreq=48000\nAudioChannels=2\nAudioSamples=2048\n"
                 + "[Rewind]\nEnabled=0\n[KeyMap]\nPause=p\nLoad=F1\nSave=F2\nDisplayPerf=f\n");
         if (!new File(directory(), "keybinds.ini").isFile()) write("keybinds.ini",
                 "[player1]\na=X\nb=Z\nx=S\ny=A\nl=C\nr=V\nstart=Return\nselect=Right Shift\n"

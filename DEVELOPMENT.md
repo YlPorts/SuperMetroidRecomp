@@ -1075,3 +1075,48 @@ brief input taps can be consumed between simulated frames; a physical-phone
 multitouch/latency session is still needed. No performance claims follow from
 this virtual device. The signed ARM64 APK is the release deliverable; the
 x86_64 debug APK remains a test artifact only.
+
+## 2026-09-30: Android alpha2 audio scheduling and touch symbols
+
+Phone feedback reported interrupted audio and requested unlabeled controls.
+Android now decouples presentation at the simulation field rate, leaving the
+framework host clock in charge and disabling the second GLES vsync wait. The
+existing keep_pacing_debt hook uses a bounded Android policy: scheduling debt
+within three fields is recovered, long interruptions re-anchor the clock, and
+non-interactive door loading keeps the original multi-field audio policy.
+No framework files, generated banks, guest CPU/SPC timing or guest state were
+changed. A deterministic 3,000-frame replay through the production DSP FIFO
+and resampler injects a periodic 18 ms interruption; the old debt-discarding
+policy has 56 underflows and the bounded policy has 0. This is scheduling
+regression evidence, not a claim about physical-phone FPS or audible output.
+
+The read-only custom renderer previously copied 64 KiB of VRAM for all 224
+visible lines. It now copies once per frame and again only on a PPU host write
+revision/owner change. Compact line records share immutable images; mid-frame
+DMA gets a new snapshot and the worst case remains bounded at 224. Palette,
+OAM and register snapshots remain per-line. Expanded diagnostic v1/v2 capture
+files still load and save through explicit conversion. A native 1,000-frame
+capture microbenchmark falls from 1,256.909 ms to 22.301 ms; eight before/after
+mode 1/7, mosaic and mid-frame-upload outputs are byte-identical. An old v2
+capture also renders byte-identically. This measures capture work only.
+
+Android prefers SDL's AAudio backend with ordered OpenSL ES/AudioTrack
+fallback, uses 48 kHz stereo with a 2,048-frame device block, requests a 60 Hz
+panel mode and identifies itself as a game. Native defaults also apply to
+existing alpha1 installations, whose config.ini was seeded only once. The
+consumer remains guest-clock driven; no fabricated audio or timing advance
+was introduced. Touch controls use resolution-independent stroke symbols,
+larger jump/fire targets, translucent rings and held feedback, retaining saved
+positions, size, opacity, sliding and independent finger ownership. Cached
+settings and unchanged-pointer early returns reduce move-event work; the
+overlay still has no animation/redraw loop. No letter or word is drawn inside
+any gameplay/editor button.
+
+ARM64 alpha2 release compiles with the complete existing generated engine,
+versionCode 2, the original private signing identity, and debuggable=false.
+APK v2 verification and 16 KiB zip alignment pass. Lint: 0 errors, 66 warnings.
+Renderer/VRAM ownership, cadence, real-consumer audio jitter/delivery, JVM
+multi-touch/import and door-audio regressions pass. ROMs, keys and generated C
+remain excluded from the repository and APK. Physical A15 audio, performance,
+multitouch and long-session checks are still needed; virtual Android tests do
+not establish those results.

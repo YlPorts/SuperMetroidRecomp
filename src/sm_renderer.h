@@ -8,6 +8,8 @@ void SmRendererSetRom(const uint8_t *rom, size_t size);
 void SmRendererLatchObjectState(const uint8_t ram[0x20000]);
 void SmRendererBeginFrame(const uint8_t ram[0x20000], unsigned number);
 void SmRendererCaptureLine(const Ppu *ppu, unsigned line);
+/* Count of distinct immutable VRAM images in the current frame. */
+unsigned SmRendererVramCopies(void);
 bool SmRendererEndFrame(const uint32_t stock[256 * 224]);
 bool SmRendererDraw(uint32_t *output, SmViewport viewport, bool hud_anchored, double alpha);
 bool SmRendererRoomTile(const uint8_t ram[0x20000], int x, int y, uint16_t *entry);

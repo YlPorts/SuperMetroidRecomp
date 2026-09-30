@@ -111,6 +111,34 @@ if(BUILD_TESTING AND NOT ANDROID)
         src ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
     add_test(NAME sm_custom_renderer
         COMMAND sm_renderer_test ${CMAKE_CURRENT_BINARY_DIR}/sm-renderer-test.capture)
+    add_executable(sm_snapshot_test tests/sm_snapshot_test.c src/sm_renderer.c src/sm_mode7.c)
+    target_include_directories(sm_snapshot_test PRIVATE src ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
+    add_test(NAME sm_raster_snapshots COMMAND sm_snapshot_test)
+    add_executable(sm_android_pacing_test tests/sm_android_pacing_test.c)
+    target_include_directories(sm_android_pacing_test PRIVATE src)
+    add_test(NAME sm_android_pacing COMMAND sm_android_pacing_test)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        add_executable(sm_android_audio_jitter_test
+            tests/sm_android_audio_jitter_test.c
+            ${SNESRECOMP_ROOT}/runner/src/desktop/host_clock.c
+            ${SNESRECOMP_ROOT}/runner/src/snes/dsp.c
+            ${SNESRECOMP_ROOT}/runner/src/audio_trace.c)
+        target_include_directories(sm_android_audio_jitter_test PRIVATE
+            src ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
+        target_compile_definitions(sm_android_audio_jitter_test PRIVATE
+            _POSIX_C_SOURCE=200809L SNESRECOMP_TRACE=0 SDL_MAIN_HANDLED)
+        target_compile_options(sm_android_audio_jitter_test PRIVATE
+            -UNDEBUG -O2 -flto -ffunction-sections -fdata-sections)
+        target_link_options(sm_android_audio_jitter_test PRIVATE -flto)
+        if(APPLE)
+            target_link_options(sm_android_audio_jitter_test PRIVATE -Wl,-dead_strip)
+        else()
+            target_link_options(sm_android_audio_jitter_test PRIVATE -Wl,--gc-sections)
+        endif()
+        snesrecomp_target_sdl(sm_android_audio_jitter_test)
+        target_link_libraries(sm_android_audio_jitter_test PRIVATE m)
+        add_test(NAME sm_android_audio_jitter COMMAND sm_android_audio_jitter_test)
+    endif()
     add_executable(sm_mode7_test tests/sm_mode7_test.c src/sm_mode7.c)
     target_include_directories(sm_mode7_test PRIVATE src)
     add_test(NAME sm_custom_mode7 COMMAND sm_mode7_test)
@@ -119,7 +147,7 @@ if(BUILD_TESTING AND NOT ANDROID)
     target_include_directories(sm_render_capture PRIVATE src
         ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
     # Assertions are the test oracle, including Release configurations.
-    foreach(sm_test sm_video_test sm_renderer_test)
+    foreach(sm_test sm_video_test sm_renderer_test sm_snapshot_test sm_android_pacing_test)
         if(MSVC)
             target_compile_options(${sm_test} PRIVATE /UNDEBUG)
         else()
