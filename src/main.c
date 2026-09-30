@@ -47,6 +47,11 @@
 #include "sm_renderer.h"
 #include "sm_video.h"
 #include "sm_spc_player.h"
+#ifdef __ANDROID__
+#include "platform/android/android_video.h"
+#include "platform/android/android_pacing.h"
+#include "config.h"
+#endif
 #if defined(RECOMP_LAUNCHER)
 #include "sm_mods.h"
 #endif
@@ -62,6 +67,10 @@ extern uint8_t g_ram[0x20000];
 static const char *kSmVideoConfig = "sm-video.ini";
 static SmViewport g_sm_viewport;
 static uint32_t g_sm_output[SM_MAX_WIDTH * SM_HEIGHT];
+#ifdef __ANDROID__
+static SmAndroidPacing g_android_pacing;
+static bool g_android_keep_debt;
+#endif
 
 static bool SmCustomRendererEnabled(void) {
   return g_sm_video.enhanced || g_sm_video.fps_enabled;
@@ -71,6 +80,17 @@ bool SmDisplay_IsWidescreenActive(void) { return g_sm_viewport.enhanced; }
 int SmDisplay_GetCurrentFrameWidth(void) { return snesrecomp_desktop_frame_width(); }
 
 static void SmAfterConfig(void) {
+#ifdef __ANDROID__
+  /* One host clock owns pacing; a blocking GLES swap must not add another
+   * 60 Hz wait. Prefer Android's modern output with SDL's ordered fallback.
+   * These also migrate alpha1's saved defaults without touching save files. */
+  SDL_SetHint(SDL_HINT_AUDIODRIVER, "aaudio,openslES,android");
+  g_config.vsync = kSnesVSync_Off;
+  g_config.disable_frame_delay = false;
+  g_config.audio_freq = 48000;
+  g_config.audio_samples = 2048;
+  g_config.run_ahead = 0;
+#endif
   if (!SmVideoLoad(&g_sm_video, kSmVideoConfig))
     fprintf(stderr, "[video] Invalid settings in %s; valid entries retained.\n", kSmVideoConfig);
   SmRendererReset();
@@ -95,6 +115,12 @@ static void SmOnRomLoaded(const uint8_t *rom, size_t size) {
 
 static void SmOnReset(void) {
   SmRendererReset();
+#ifdef __ANDROID__
+  /* after_run_frame time is session-relative, even after loading a state.
+   * Discard one scheduling debt decision to re-anchor after that jump. */
+  g_android_pacing.started = false;
+  g_android_keep_debt = false;
+#endif
 }
 
 static void SmBeforeRunFrame(void) {
@@ -106,14 +132,29 @@ static void SmBeforeRunFrame(void) {
  * guest-driven SPC queue. The moment state 8 gameplay returns, drop any
  * remainder so Samus can never burst forward after the doorway. */
 static int SmKeepPacingDebt(void) {
+#ifdef __ANDROID__
+  return g_android_keep_debt;
+#else
   uint8_t game_state = g_ram[0x0998];
   return game_state >= 9 && game_state <= 11;
+#endif
 }
 
 static void SmPrepareFrame(int drawable_w, int drawable_h, int *frame_w, int *frame_h) {
+#ifdef __ANDROID__
+  SmAndroidApplyVideo(&g_sm_video);
+#endif
   g_sm_viewport = SmCalculateViewport(&g_sm_video, drawable_w, drawable_h);
   *frame_w = g_sm_viewport.width;
   *frame_h = SM_HEIGHT;
+}
+
+static void SmComputeViewport(int frame_w, int frame_h, int w, int h,
+                               SnesDisplayViewport *out) {
+  (void)frame_w;
+  (void)frame_h;
+  SmRect rect = SmDestination(g_sm_viewport, w, h);
+  *out = (SnesDisplayViewport){rect.x, rect.y, rect.w, rect.h};
 }
 
 /* Simulation owns these: the renderer's per-frame capture runs exactly once
@@ -149,9 +190,16 @@ static int SmDrawFrame(uint8_t *dst, size_t pitch, const uint8_t *field,
  * are custom-renderer only; without the fps mod the picture is presented
  * in lockstep with the simulation (and vsync stays on). */
 static double SmPresentationHzHook(double display_refresh) {
+#ifdef __ANDROID__
+  /* Also avoids a blocking swap when the optional wide renderer is off.
+   * Skip redundant compositions while repaying a small scheduling delay. */
+  (void)display_refresh;
+  return SM_SIMULATION_HZ;
+#else
   if (!SmCustomRendererEnabled() || !g_sm_video.fps_enabled)
     return 0;
   return SmPresentationHz(g_sm_video.fps, display_refresh > 0 ? display_refresh : 60);
+#endif
 }
 
 #if defined(RECOMP_LAUNCHER)
@@ -172,6 +220,13 @@ static void SmCloseAudioProbe(void) {
   g_audio_probe = NULL;
 }
 static void SmAfterRunFrame(const SnesDesktopHostFrameStats *st) {
+#ifdef __ANDROID__
+  unsigned state = g_ram[0x998] | g_ram[0x999] << 8;
+  if (!g_android_pacing.started && st->frame > 1)
+    g_android_pacing = (SmAndroidPacing){st->run_seconds, true};
+  g_android_keep_debt = SmAndroidKeepShortDebt(&g_android_pacing,
+      st->run_seconds, RtlLastFramePeriods(), SM_SIMULATION_HZ, state >= 9 && state <= 11);
+#endif
   static int probe_checked;
   if (!probe_checked) {
     probe_checked = 1;
@@ -241,6 +296,9 @@ static const SnesDesktopHostGame kSuperMetroidHost = {
   .presentation_hz = &SmPresentationHzHook,
   .window_base_width = &SmDisplay_GetWindowBaseWidth,
   .window_base_height = &SmDisplay_GetWindowBaseHeight,
+#ifdef __ANDROID__
+  .compute_viewport = &SmComputeViewport,
+#endif
 };
 
 #ifndef __ANDROID__

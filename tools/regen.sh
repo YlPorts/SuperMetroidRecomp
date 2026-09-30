@@ -102,6 +102,15 @@ else
   echo "== Skipping ROM verification (--no-verify) =="
 fi
 
+# The emitter reads recomp/funcs.h for host ABI aliases as well as writing
+# the generated declarations afterwards. Seed that cfg-derived input first:
+# otherwise a clean checkout's first emit and its second emit see different
+# inputs (missing header versus complete header), including interrupt aliases.
+# Use the framework's own synchronizer, with no generated-source edits.
+echo "== Preparing host declarations =="
+"$PYTHON" "$SNESRECOMP_ROOT/tools/v2_sync_funcs_h.py" \
+  --cfg-dir recomp --out recomp/funcs.h
+
 GEN_ARGS=(--rom "$ROM" --cfg-dir recomp --out-dir src/gen
           --funcs-h recomp/funcs.h --project-root "$ROOT")
 

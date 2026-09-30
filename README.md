@@ -66,7 +66,19 @@ Settings and saves live beside the executable/AppImage. Keep that directory
 writable, and preserve your settings and `saves/` when updating. The detailed
 implementation and validation record is in `docs/custom-renderer.md`.
 
-## Building from source
+## Android port
+
+The Android interface imports the original Japan/USA ROM through the system
+file picker, enables the existing custom ultrawide renderer (Fit, 16:9, 21:9,
+32:9), and overlays adjustable multitouch controls. It supports ARM64 on
+Android 9+, including Android 16 and 16 KiB native-library alignment.
+
+See [android/README.md](android/README.md) for controls, build instructions and
+validation limits. A playable APK requires generating `src/gen/` from the
+owner's ROM. The explicit `androidVerifyOnly` build verifies the integration
+without ROM-derived code and cannot play the game.
+
+## Building the desktop version
 
 Prerequisites: a `snesrecomp` checkout at `./snesrecomp` (junction/symlink
 to the sibling repo, pinned in `snesrecomp.pin`), a verified Super Metroid

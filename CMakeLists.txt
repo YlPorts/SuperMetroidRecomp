@@ -111,6 +111,34 @@ if(BUILD_TESTING AND NOT ANDROID)
         src ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
     add_test(NAME sm_custom_renderer
         COMMAND sm_renderer_test ${CMAKE_CURRENT_BINARY_DIR}/sm-renderer-test.capture)
+    add_executable(sm_snapshot_test tests/sm_snapshot_test.c src/sm_renderer.c src/sm_mode7.c)
+    target_include_directories(sm_snapshot_test PRIVATE src ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
+    add_test(NAME sm_raster_snapshots COMMAND sm_snapshot_test)
+    add_executable(sm_android_pacing_test tests/sm_android_pacing_test.c)
+    target_include_directories(sm_android_pacing_test PRIVATE src)
+    add_test(NAME sm_android_pacing COMMAND sm_android_pacing_test)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        add_executable(sm_android_audio_jitter_test
+            tests/sm_android_audio_jitter_test.c
+            ${SNESRECOMP_ROOT}/runner/src/desktop/host_clock.c
+            ${SNESRECOMP_ROOT}/runner/src/snes/dsp.c
+            ${SNESRECOMP_ROOT}/runner/src/audio_trace.c)
+        target_include_directories(sm_android_audio_jitter_test PRIVATE
+            src ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
+        target_compile_definitions(sm_android_audio_jitter_test PRIVATE
+            _POSIX_C_SOURCE=200809L SNESRECOMP_TRACE=0 SDL_MAIN_HANDLED)
+        target_compile_options(sm_android_audio_jitter_test PRIVATE
+            -UNDEBUG -O2 -flto -ffunction-sections -fdata-sections)
+        target_link_options(sm_android_audio_jitter_test PRIVATE -flto)
+        if(APPLE)
+            target_link_options(sm_android_audio_jitter_test PRIVATE -Wl,-dead_strip)
+        else()
+            target_link_options(sm_android_audio_jitter_test PRIVATE -Wl,--gc-sections)
+        endif()
+        snesrecomp_target_sdl(sm_android_audio_jitter_test)
+        target_link_libraries(sm_android_audio_jitter_test PRIVATE m)
+        add_test(NAME sm_android_audio_jitter COMMAND sm_android_audio_jitter_test)
+    endif()
     add_executable(sm_mode7_test tests/sm_mode7_test.c src/sm_mode7.c)
     target_include_directories(sm_mode7_test PRIVATE src)
     add_test(NAME sm_custom_mode7 COMMAND sm_mode7_test)
@@ -119,7 +147,7 @@ if(BUILD_TESTING AND NOT ANDROID)
     target_include_directories(sm_render_capture PRIVATE src
         ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
     # Assertions are the test oracle, including Release configurations.
-    foreach(sm_test sm_video_test sm_renderer_test)
+    foreach(sm_test sm_video_test sm_renderer_test sm_snapshot_test sm_android_pacing_test)
         if(MSVC)
             target_compile_options(${sm_test} PRIVATE /UNDEBUG)
         else()
@@ -170,13 +198,18 @@ set(SM_HOST_SOURCES
     src/sm_mode7.c        # SM's mode-7 object projection
     src/sm_display.c      # SM presentation geometry
     src/sm_video.c        # SM aspect/HUD policy + presentation clock
-    src/sm_mods.c         # built-in presentation mod provider
 )
+
+if(NOT ANDROID)
+    list(APPEND SM_HOST_SOURCES src/sm_mods.c)
+endif()
 
 if(ANDROID)
     # SDLActivity loads "libmain.so" and calls its SDL_main.
     add_library(SuperMetroidSNESRecomp SHARED ${SM_HOST_SOURCES})
     set_target_properties(SuperMetroidSNESRecomp PROPERTIES OUTPUT_NAME main)
+    target_sources(SuperMetroidSNESRecomp PRIVATE src/platform/android/android_video.c)
+    target_link_options(SuperMetroidSNESRecomp PRIVATE "-Wl,-z,max-page-size=16384")
 else()
     add_executable(SuperMetroidSNESRecomp ${SM_HOST_SOURCES})
 endif()
@@ -301,16 +334,20 @@ endif()
 # CONSOLE is required by recomp-ui: it selects exactly one validated
 # assets/consoles/<id>/ manifest, so an SNES game cannot silently stage N64
 # cartridge or NES pad art next to the exe.
-recomp_target_launcher_ui(SuperMetroidSNESRecomp
-    CONSOLE snes
-    BOXART ${CMAKE_CURRENT_SOURCE_DIR}/recomp/launcher/boxart.tga)
+if(NOT ANDROID)
+    recomp_target_launcher_ui(SuperMetroidSNESRecomp
+        CONSOLE snes
+        BOXART ${CMAKE_CURRENT_SOURCE_DIR}/recomp/launcher/boxart.tga)
+endif()
 
 # Generate & rebuild from inside the launcher: pick ROM -> recompile locally
 # -> cmake --build -> relaunch. The implementation is the framework's and the
 # host wires it (snesrecomp_codegen_host_autowire); this project contributes
 # no configuration.
-target_sources(SuperMetroidSNESRecomp PRIVATE
-    ${SNESRECOMP_ROOT}/host/snesrecomp_codegen_host.c)
+if(NOT ANDROID)
+    target_sources(SuperMetroidSNESRecomp PRIVATE
+        ${SNESRECOMP_ROOT}/host/snesrecomp_codegen_host.c)
+endif()
 target_include_directories(SuperMetroidSNESRecomp PRIVATE
     ${SNESRECOMP_ROOT}/host
     ${RECOMP_UI_ROOT}/src)

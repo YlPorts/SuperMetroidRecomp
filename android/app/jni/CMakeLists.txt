@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.16)
 
 project(SuperMetroidSNESRecompAndroid)
 
+set(SDL_SHARED ON CACHE BOOL "" FORCE)
+set(SDL_STATIC OFF CACHE BOOL "" FORCE)
+set(SDL_TEST OFF CACHE BOOL "" FORCE)
+set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+
 # SDL2 source lives in ./SDL (pinned copy fetched by android/fetch_sdl.sh; it
 # is not committed). Builds libSDL2.so and exports the SDL2::SDL2 target the
 # game links against.

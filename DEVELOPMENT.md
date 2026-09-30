@@ -966,3 +966,157 @@ regeneration wiring remain pending. Full evidence is in the engine worktree's
 ## Owner-gated (do NOT do without explicit decision)
 Merging `investigate/sm-0012-blocker` or the multi-tier branches to main;
 releasing any game; reconciling the multi-tier branches; editing `src/gen/`.
+
+## 2026-09-30: Android ultrawide interface and native integration
+
+Added on the separate `android-ultrawide` branch from `0da320f`. The Android
+launcher now uses the system document picker instead of requiring adb-pushed
+ROM/config files. It bounds input, removes an optional 512-byte copier header,
+verifies the game's pinned SHA-256, and replaces the previous image only after
+a successful import. Settings and saves are app-local; no ROM is packaged.
+
+An SDLActivity subclass adds a translucent, event-driven touch overlay with
+eight-way directional control, independent pointer tracking and aggregate key
+transitions. It supports simultaneous movement/shoot/jump, button sliding,
+safe release on cancellation/focus loss, position editing, size/opacity,
+optional haptics and automatic hiding with a physical controller. Android 13+
+back dispatch opens the native game menu, including on target SDK 36.
+The pinned SDL Java HID manager has a mixed USB broadcast filter registered
+without export flags. GameActivity qualifies that private filter with
+RECEIVER_NOT_EXPORTED on API 33+ to avoid the target-34+ startup exception.
+SDL remains unchanged. Lint exclusions cover only that vendored call and SDL's
+permission-gated Bluetooth code; errors in the app's own code remain fatal.
+
+Android uses the existing read-only custom renderer. Fit is enabled by default;
+the native aspect settings offer 4:3, 16:9, 21:9, 32:9 and Fit. A packed atomic
+JNI update applies settings on the SDL presentation thread. Its viewport uses
+the requested display aspect, keeping even-rounded internal pixel widths from
+causing thin borders at a phone's exact aspect. Desktop launcher wiring remains
+available in desktop builds; Android omits the desktop code-generation wizard.
+
+The toolchain is JDK 17, Gradle 8.11.1, AGP 8.10.1, SDK/Build Tools 36, NDK
+28.2.13676358 and the existing SHA-verified SDL 2.32.8 C/Java pair. Native
+libraries and APK entries were checked for 16 KiB alignment. Generated C is
+still mandatory in ordinary builds. An explicit `androidVerifyOnly=true`
+build uses the official non-playing setup host and a separate `.buildcheck`
+package; the launcher disables Play for that build. No gameplay stubs or
+alternative core were introduced.
+
+Validation: both JVM input/import suites, the existing custom video, renderer,
+Mode 7, display geometry, PPU windows, overlay composition, held-save-gesture
+tests and the five door-audio trace tests passed. The display test still had
+two obsolete 446-pixel cap expectations; corrected its 21:9 width to 448 and
+derived its maximum from the current framework constant. Added exact Fit and
+fixed 21:9 geometry checks for a 2340×1080 landscape phone panel.
+
+Java/resources/JNI/SDL/shared-runtime ARM64 packaging succeeds using the setup
+host. Android lint completes with 0 errors and 66 warnings after the scoped
+vendored exclusions above; remaining warnings include SDL and intentional
+landscape/synchronous preference persistence choices.
+Dynamic symbols include SDL_main and the Android video JNI bridge. This
+validates integration and packaging, not gameplay. No Super Metroid ROM was
+available for regeneration, actual-game linking, positive import or playtests;
+phone performance, visual/touch behavior, pause/resume and save/load therefore
+remain unverified. The verification APK is not a playable deliverable.
+
+
+## 2026-09-30: full Android engine generation and signed ARM64 APK
+
+The supplied Super Metroid Japan/USA image matches the pinned identity:
+3,145,728 bytes, CRC32 d63ed5f8, SHA-256
+12b77c4bc9c1832cee8881244659065ee1d84c70c3d29e6eaf92e6798cc2ca72.
+The import test now accepts an optional local image and checks a successful
+plain import and a 512-byte-header import, with exact game-byte equality.
+`build-port.sh` passes its already-verified image to that test. No ROM or
+ROM-derived generated C is committed or packaged as an APK asset.
+
+A clean generation exposed an input-order problem in the framework SDK:
+`v2_emit` reads cfg-side funcs.h for host ABI aliases, while `sdk_generate`
+only synchronizes that header after emitting. The initial emit had no header;
+the second saw it, changing aliases (including interrupt wrappers) and the
+config digest although the architecture manifest was identical. The title's
+regen script now invokes the framework's official v2_sync_funcs_h first. It
+then regenerates all banks and still synchronizes declarations afterwards.
+There are no hand edits to generated C and no copied generator implementation.
+Full generation into an empty tree followed by the strict scratch generation
+passes byte-for-byte: 22,672 roots, 14,640 emitted AOT variants, 11,116 LLE
+variants, 124 banks, 345 C translation units, about 230 MB of generated output.
+Atomic staging/previous output directories are also excluded from git.
+
+The complete engine links in both ARM64 release and x86_64 Android debug
+builds. `-PsmAbis=x86_64` is an optional emulator-test setting; ARM64 remains
+the default. ARM64 release has ENGINE_COMPILED=true, is not debuggable, is
+signed with a separate private RSA-3072 key, and contains only libSDL2.so and
+libmain.so for arm64-v8a. APK v2 signature verification and 16 KiB zip alignment
+pass; all native LOAD segments use alignment 0x4000. Lint remains 0 errors and
+66 warnings. The private key is kept outside the repository for updates.
+
+An Android 15 emulator startup caught a real Java failure before content was
+installed: PhoneWindow.getInsetsController assumes a DecorView already exists.
+PhoneUi.immersive now obtains getDecorView first, so calls from onCreate are
+safe. The updated launcher opens successfully and displays the fullscreen
+introductory system prompt. The emulator runs without KVM and suffers system
+Quickstep/System UI ANRs; these are recorded separately from app crashes.
+Device-flow validation continues below. Physical-phone performance and full
+playthrough coverage are still pending.
+
+
+Final device-flow evidence (same Android 15 x86_64 debug build with the real
+engine): the system OPEN_DOCUMENT picker listed SuperMetroid.sfc; selecting
+it enabled Play and displayed `ROM lista · Tu pantalla`. Play entered the
+isolated :game activity, loaded SDL2/main, started SDL_main and reached the
+Super Metroid title. A later rainy Crateria ship scene rendered across the
+full 780×360 display, with the HUD at the edges and all touch controls visible.
+The touch menu opened, saving created saves/save0.sav (305,602 bytes), and an
+issued load was followed by further scene rendering. This is a smoke test,
+not proof of file-state correctness across arbitrary coroutine positions.
+No fresh app crash appeared in the crash log. Emulator guest time is slow and
+brief input taps can be consumed between simulated frames; a physical-phone
+multitouch/latency session is still needed. No performance claims follow from
+this virtual device. The signed ARM64 APK is the release deliverable; the
+x86_64 debug APK remains a test artifact only.
+
+## 2026-09-30: Android alpha2 audio scheduling and touch symbols
+
+Phone feedback reported interrupted audio and requested unlabeled controls.
+Android now decouples presentation at the simulation field rate, leaving the
+framework host clock in charge and disabling the second GLES vsync wait. The
+existing keep_pacing_debt hook uses a bounded Android policy: scheduling debt
+within three fields is recovered, long interruptions re-anchor the clock, and
+non-interactive door loading keeps the original multi-field audio policy.
+No framework files, generated banks, guest CPU/SPC timing or guest state were
+changed. A deterministic 3,000-frame replay through the production DSP FIFO
+and resampler injects a periodic 18 ms interruption; the old debt-discarding
+policy has 56 underflows and the bounded policy has 0. This is scheduling
+regression evidence, not a claim about physical-phone FPS or audible output.
+
+The read-only custom renderer previously copied 64 KiB of VRAM for all 224
+visible lines. It now copies once per frame and again only on a PPU host write
+revision/owner change. Compact line records share immutable images; mid-frame
+DMA gets a new snapshot and the worst case remains bounded at 224. Palette,
+OAM and register snapshots remain per-line. Expanded diagnostic v1/v2 capture
+files still load and save through explicit conversion. A native 1,000-frame
+capture microbenchmark falls from 1,256.909 ms to 22.301 ms; eight before/after
+mode 1/7, mosaic and mid-frame-upload outputs are byte-identical. An old v2
+capture also renders byte-identically. This measures capture work only.
+
+Android prefers SDL's AAudio backend with ordered OpenSL ES/AudioTrack
+fallback, uses 48 kHz stereo with a 2,048-frame device block, requests a 60 Hz
+panel mode and identifies itself as a game. Native defaults also apply to
+existing alpha1 installations, whose config.ini was seeded only once. The
+consumer remains guest-clock driven; no fabricated audio or timing advance
+was introduced. Touch controls use resolution-independent stroke symbols,
+larger jump/fire targets, translucent rings and held feedback, retaining saved
+positions, size, opacity, sliding and independent finger ownership. Cached
+settings and unchanged-pointer early returns reduce move-event work; the
+overlay still has no animation/redraw loop. No letter or word is drawn inside
+any gameplay/editor button.
+
+ARM64 alpha2 release compiles with the complete existing generated engine,
+versionCode 2, the original private signing identity, and debuggable=false.
+APK v2 verification and 16 KiB zip alignment pass. Lint: 0 errors, 66 warnings.
+Renderer/VRAM ownership, cadence, real-consumer audio jitter/delivery, JVM
+multi-touch/import and door-audio regressions pass. ROMs, keys and generated C
+remain excluded from the repository and APK. Physical A15 audio, performance,
+multitouch and long-session checks are still needed; virtual Android tests do
+not establish those results.

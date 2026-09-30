@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- SDL's Bluetooth manager checks permission before constructing its BLE
+         devices. This app does not request BLE access; ordinary gamepads use
+         Android input events. Do not suppress permission checks in our code. -->
+    <issue id="MissingPermission">
+        <ignore regexp=".*/org/libsdl/app/.*" />
+    </issue>
+    <!-- GameActivity.registerReceiver supplies the Android 13+ flag for this
+         exact private USB filter. SDL's pinned source is kept unchanged. -->
+    <issue id="UnspecifiedRegisterReceiverFlag">
+        <ignore regexp=".*/org/libsdl/app/HIDDeviceManager.java" />
+    </issue>
+</lint>
