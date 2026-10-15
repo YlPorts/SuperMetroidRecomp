@@ -1,6 +1,9 @@
 # Super Metroid Android 0.2.0 — validación y estado de entrega
 
-Estado: código de desarrollo publicado. La APK final no se pudo empaquetar y guardar al desconectarse el entorno local de ejecución. El error fue `409 environment_offline: Environment is not connected`. No se ofrece una APK intermedia como si fuera la entrega definitiva.
+Estado: APK ARM64 de desarrollo empaquetada y verificada tras recuperar las herramientas. Se conserva el motor restaurado; el experimento HDMA rechazado no está incluido. Esta entrega no se declara estable ni validada en el Galaxy A15.
+
+APK: `SuperMetroid-0.2.0-arm64.apk`, 49.911.200 bytes.
+SHA-256: `9dc015b23967f6f0138658ab83171efc0524409bbf1536a35a75c1d3c6abffa0`.
 
 ## Trabajo guardado en esta rama
 
@@ -23,7 +26,8 @@ Se mantiene `com.ylports.supermetroid` y la configuración de firma original. La
 | Android 15/API 35 | View de producción con MotionEvents reales: cuatro dedos, cambio de índices, botón compartido, deslizamiento, cancelación, editor persistente y cambio de tamaño. Pasó localmente y en GitHub |
 | Comparación visual | Doce capturas Mode 1: cero diferencias en los 49.152 píxeles centrales bajo el HUD de cada captura frente al raster PPU del propio framework |
 | Galaxy A15 | Sin acceso físico: no se midieron FPS, reproducción audible, latencia ni consumo en el SM-A155M |
-| APK final | Empaquetado y guardado bloqueados por la desconexión del entorno. Las verificaciones de firma/alineación de builds intermedias no se presentan como una verificación de la entrega final |
+| APK entregada | Gradle `assembleRelease` y `lint` correctos; paquete original, versión 0.2.0/código 20, ARM64, no depurable, certificado original, firma v2 y alineación ELF/ZIP de 16 KiB. Sin archivos ROM ni claves privadas |
+| Identidad del motor | El `libmain.so` extraído de la APK coincide byte por byte con la biblioteca ARM64 restaurada y preparada para distribución: SHA-256 `cc1012e0f47f332f743f28312a234849cbf16b393c8be2dbdf1a106b1c570c5a`. `verify-apk.py --engine-library` permite repetir esa comprobación y rechazar un empaquetado obsoleto |
 
 La comparación usa el mismo cuadro de dos renderizadores del proyecto. No es una comparación contra una SNES física y no certifica todas las salas, márgenes o efectos.
 
@@ -31,7 +35,13 @@ La comparación usa el mismo cuadro de dos renderizadores del proyecto. No es un
 
 El recorrido acelerado, sin salida de audio, detectó `unresolved-abandon` en `$88:D865` y límites/timeouts posteriores del puente LLE. La rutina contiene argumentos inline tras un JSL. Una prueba con `force_lle` produjo corrupción y detenciones más tempranas: se rechazó y se restauraron exactamente los bancos originales.
 
-Este fallo no se declara corregido. Alcanzar un contador de 18.000 cuadros no se contó como estabilidad satisfactoria porque el contador seguía avanzando tras una detención. Falta reproducir con cadencia y audio normales y verificar el recorrido completo.
+Este fallo no se declara corregido. Alcanzar un contador de 18.000 cuadros no se contó como estabilidad satisfactoria porque el contador seguía avanzando tras una detención. Falta verificar el recorrido completo y la salida de audio en un dispositivo real.
+
+Se repitió el recorrido con cadencia normal y el dispositivo de audio SDL dummy a 48 kHz/1024 muestras. Completó 4.000 cuadros en 69,39 segundos y salió correctamente al límite, pero reprodujo `unresolved-abandon` en `$88:D865` en el cuadro 2.659. Por ello tampoco se cuenta este recorrido como una prueba de fidelidad aprobada. La captura del cuadro 2.800 muestra la nave en el exterior.
+
+`tools/check_engine_run.py --log recorrido.log --frames 4000 --report resultado.json` rechaza este registro aunque el proceso haya devuelto 0: comprueba el final real y los avisos conocidos de abandono, watchdog y puente. Se ejecutó contra el registro real y devolvió 1 por el abandono en el cuadro 2.659. No sustituye las pruebas visuales, de partida o de audio.
+
+La sonda de audio registró vaciados: entre los cuadros 501–1.500 no hubo nuevos; entre 1.501–2.500 hubo 7 y entre 2.501–4.000 hubo 34. El arranque también presentó vaciados. Son mediciones de este host con audio dummy y carga de compilación concurrente; no demuestran cortes audibles en el teléfono ni que el sonido esté resuelto. No se ha cambiado la velocidad de música o simulación para ocultarlos.
 
 El emulador local sin KVM mostró ANR/reinicios de servicios y fallos FUSE. Las pruebas de View pasaron, pero ese entorno no certifica juego Android completo, rendimiento ni calidad audible.
 
@@ -47,12 +57,11 @@ El workflow `Android ARM64 playable release` regenera desde la ROM del propietar
 
 ## Pendientes
 
-1. Empaquetar, firmar, verificar y hacer disponible la APK definitiva desde el código restaurado.
-2. Resolver las fronteras HDMA/puente detectadas y completar recorridos con audio y reloj normales.
-3. Probar partida nueva, Ceres, jefes, puertas, ascensores, mapas y todas las habilidades. La lógica se conserva, pero no se certifica cada mecánica en esta entrega.
-4. Guardar/cargar en distintas salas y verificar interrupciones reales del ciclo de vida.
-5. Escucha, tacto, mandos, temperatura y FPS en el Galaxy A15. No se afirma 60 FPS estables.
-6. Ampliar las comparaciones externas, Mode 7 real, transparencias y salas ultrawide.
-7. La música y los efectos siguen compartiendo la mezcla SPC: no hay sliders separados ficticios.
+1. Resolver las fronteras HDMA/puente detectadas y completar recorridos prolongados con audio y reloj normales.
+2. Probar partida nueva, Ceres, jefes, puertas, ascensores, mapas y todas las habilidades. La lógica se conserva, pero no se certifica cada mecánica en esta entrega.
+3. Guardar/cargar en distintas salas y verificar interrupciones reales del ciclo de vida.
+4. Escucha, tacto, mandos, temperatura y FPS en el Galaxy A15. No se afirma 60 FPS estables.
+5. Ampliar las comparaciones externas, Mode 7 real, transparencias y salas ultrawide.
+6. La música y los efectos siguen compartiendo la mezcla SPC: no hay sliders separados ficticios.
 
 Registro de cambios: [android-v0.2.0.md](../releases/android-v0.2.0.md).

@@ -4,6 +4,11 @@ Continuación de Alpha 2, rama `android-v0.2.0`, sobre
 `57b4a2fabcec973e07f62e8e9089b970abcbe6dd` (`android-ultrawide`).
 La rama anterior y su APK permanecen intactas. No se sustituye el juego.
 
+APK ARM64 de desarrollo empaquetada con la firma original y verificada.
+SHA-256: `9dc015b23967f6f0138658ab83171efc0524409bbf1536a35a75c1d3c6abffa0`.
+Los fallos y pruebas pendientes de esta página siguen vigentes; no se etiqueta
+como una versión estable.
+
 ## Implementado
 
 - Fondo de arranque del sistema Android coherente con el tema oscuro.
