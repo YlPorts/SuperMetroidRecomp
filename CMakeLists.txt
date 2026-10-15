@@ -102,6 +102,7 @@ if(BUILD_TESTING AND NOT ANDROID)
         tests/sm_video_test.c src/sm_video.c src/sm_mods.c
         ${SNESRECOMP_ROOT}/runner/src/desktop/host_clock.c)
     target_include_directories(sm_video_test PRIVATE src ${RECOMP_UI_ROOT}/src
+        ${SNESRECOMP_ROOT}/runner/src/desktop
         ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
     add_test(NAME sm_custom_video
         COMMAND sm_video_test ${CMAKE_CURRENT_BINARY_DIR}/sm-video-test.ini)
@@ -145,6 +146,7 @@ if(BUILD_TESTING AND NOT ANDROID)
     add_executable(sm_render_capture tools/sm_render_capture.c src/sm_renderer.c src/sm_video.c src/sm_mode7.c
         ${SNESRECOMP_ROOT}/runner/src/desktop/host_clock.c)
     target_include_directories(sm_render_capture PRIVATE src
+        ${SNESRECOMP_ROOT}/runner/src/desktop
         ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
     # Assertions are the test oracle, including Release configurations.
     foreach(sm_test sm_video_test sm_renderer_test sm_snapshot_test sm_android_pacing_test)

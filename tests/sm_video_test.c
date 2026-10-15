@@ -46,7 +46,7 @@ static void geometry(void) {
 static void clock_invariance(void) {
   /* The framework clock, parameterized by this title's simulation rate. The
    * cases are the ones SmClock carried before it moved up. */
-  const unsigned rates[] = {60,90,120,144,165,240,360};
+  const unsigned rates[] = {30,60,90,120,144,165,240,360};
   for (unsigned r=0;r<sizeof(rates)/sizeof(rates[0]);++r) {
     SnesHostClock clock;
     snes_host_clock_reset(&clock,0,SM_SIMULATION_HZ,rates[r]);

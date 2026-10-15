@@ -45,6 +45,20 @@ La rama anterior y su APK permanecen intactas. No se sustituye el juego.
   privada del propietario. Pruebas nativas, JVM, lint y MotionEvents reales
   mediante una instrumentación Android sin dependencias de terceros.
 
+## Correcciones surgidas del recorrido real
+
+- La rutina `$88:D865` consume argumentos que siguen a un JSL y modifica el
+  retorno invitado. La frontera AOT anterior acababa en `$D869`, y el motor
+  registraba `unresolved-abandon` omitiendo la continuación. Se marca esa
+  frontera exacta `force_lle` para ejecutar los bytes originales con el puente
+  existente, sin descodificar los argumentos como instrucciones ni inventar
+  efectos HDMA.
+- Android aplica ahora la configuración de rebobinado del host y lo mantiene
+  desactivado. Antes se reservaba un anillo de 60 estados completos (17,5 MB
+  en la ejecución medida) aunque el INI decía `Enabled=0`.
+- Corregidos los includes de `host_clock.h` de las herramientas de replay y
+  pruebas de vídeo tras su traslado a la carpeta desktop del framework.
+
 ## Arquitectura conservada
 
 `snesrecomp` y `recomp-ui` mantienen sus commits fijados en Alpha 2. Se

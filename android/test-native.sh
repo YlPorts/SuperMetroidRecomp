@@ -9,9 +9,10 @@ common=(-std=c11 -D_POSIX_C_SOURCE=200809L -O2 -UNDEBUG -Isrc -Isnesrecomp/runne
 compile_run() {
     local name="$1"; shift
     "$cc_bin" "${common[@]}" "$@" -lm -o "$out/$name"
-    "$out/$name"
+    if [[ "$name" == video ]]; then "$out/$name" "$out/video-test.ini"; else "$out/$name"; fi
 }
 compile_run atomic_file tests/sm_atomic_file_test.c src/platform/android/atomic_file.c
+compile_run video -Irecomp-ui/src tests/sm_video_test.c src/sm_video.c src/sm_mods.c snesrecomp/runner/src/desktop/host_clock.c
 compile_run display tests/sm_display_test.c src/sm_display.c
 compile_run pacing tests/sm_android_pacing_test.c
 compile_run mode7 tests/sm_mode7_test.c src/sm_mode7.c

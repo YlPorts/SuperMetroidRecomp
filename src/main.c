@@ -95,6 +95,7 @@ static void SmAfterConfig(void) {
       g_config.audio_samples != 4096) g_config.audio_samples = 2048;
   g_config.linear_filtering = false;
   g_config.run_ahead = 0;
+  g_config.rewind_enabled = false;
 #endif
   if (!SmVideoLoad(&g_sm_video, kSmVideoConfig))
     fprintf(stderr, "[video] Invalid settings in %s; valid entries retained.\n", kSmVideoConfig);
@@ -309,6 +310,11 @@ static const SnesDesktopHostGame kSuperMetroidHost = {
   .widescreen_supported = 0,       /* widescreen is this title's Mods page */
   .msu1_supported = 0,
   .shader_supported = 1,
+#ifdef __ANDROID__
+  /* Apply the configured disabled ring: otherwise the shared host silently
+   * retains 60 full snapshots, even with [Rewind] Enabled=0. */
+  .rewind_settings = 1,
+#endif
   .simulation_hz = SM_SIMULATION_HZ,
   .frame_width = 256,
   .frame_height = SM_HEIGHT,
