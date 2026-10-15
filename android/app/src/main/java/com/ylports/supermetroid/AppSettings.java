@@ -25,9 +25,23 @@ final class AppSettings {
     int aspect() { return Math.max(0, Math.min(4, prefs.getInt("aspect", 4))); }
     boolean wide() { return prefs.getBoolean("wide", true); }
     boolean hud() { return prefs.getBoolean("hud", true); }
-    int size() { return Math.max(70, Math.min(145, prefs.getInt("size", 100))); }
+    int size() { return Math.max(70, Math.min(145, prefs.getInt("size", 85))); }
     int opacity() { return Math.max(20, Math.min(90, prefs.getInt("opacity", 50))); }
     boolean vibration() { return prefs.getBoolean("vibration", false); }
+    boolean fullscreen() { return prefs.getBoolean("fullscreen", true); }
+    boolean integerScale() { return prefs.getBoolean("integerScale", false); }
+    boolean safeWide() { return prefs.getBoolean("safeWide", true); }
+    boolean labels() { return prefs.getBoolean("labels", true); }
+    int volume() { return Math.max(0, Math.min(100, prefs.getInt("volume", 100))); }
+    int presentation() { return prefs.getInt("presentation", 60) == 30 ? 30 : 60; }
+    int audioSamples() {
+        int n = prefs.getInt("audioSamples", 2048);
+        return n == 512 || n == 1024 || n == 4096 ? n : 2048;
+    }
+    float controlValue(String id, String property, float fallback, float min, float max) {
+        float n = prefs.getFloat(id + "." + property, fallback);
+        return Float.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback;
+    }
     void writeVideo() throws IOException {
         write("sm-video.ini", "[SuperMetroidVideo]\nEnhancedRenderer=" + (wide() ? 1 : 0)
                 + "\nAspect=" + ASPECTS[aspect()] + "\nPresentationEnabled=0\nPresentationFPS=60\nHudAnchored="
@@ -37,12 +51,20 @@ final class AppSettings {
         writeVideo();
         write("rom.cfg", rom().getAbsolutePath() + "\n");
         // Seed once. Subsequent launches keep the engine's saved settings.
-        if (!new File(directory(), "config.ini").isFile()) write("config.ini",
+        // Own Android host policy, retaining unknown framework options. Rewrite
+        // these few keys on each boot so upgrades keep saves and key mappings.
+        File config = new File(directory(), "config.ini");
+        if (!config.isFile()) write("config.ini",
                 "[General]\nSkipLauncher=1\nRunAhead=0\nAutosave=0\nDisableFrameDelay=0\n"
                 + "[Graphics]\nRenderer=opengles2\nVSync=0\nNewRenderer=1\nNoSpriteLimits=1\n"
                 + "IgnoreAspectRatio=0\nFullscreen=1\nFrameBlend=0\n"
                 + "[Sound]\nVolume=100\nEnableAudio=1\nAudioFreq=48000\nAudioChannels=2\nAudioSamples=2048\n"
                 + "[Rewind]\nEnabled=0\n[KeyMap]\nPause=p\nLoad=F1\nSave=F2\nDisplayPerf=f\n");
+        String configText = new String(Files.readAllBytes(config.toPath()), StandardCharsets.UTF_8);
+        configText = IniSettings.set(configText, "Sound", "AudioSamples", Integer.toString(audioSamples()));
+        configText = IniSettings.set(configText, "Sound", "Volume", Integer.toString(volume()));
+        configText = IniSettings.set(configText, "Graphics", "LinearFiltering", "0");
+        write("config.ini", configText);
         if (!new File(directory(), "keybinds.ini").isFile()) write("keybinds.ini",
                 "[player1]\na=X\nb=Z\nx=S\ny=A\nl=C\nr=V\nstart=Return\nselect=Right Shift\n"
                 + "up=Up\ndown=Down\nleft=Left\nright=Right\n");

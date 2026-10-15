@@ -32,7 +32,13 @@ public final class TouchInput {
     }
 
     public static int direction(float x, float y, float radius) {
-        if (radius <= 0 || x*x + y*y < radius*radius*0.045f) return 0;
+        return direction(x, y, radius, .212132f);
+    }
+    public static int direction(float x, float y, float radius, float deadZone) {
+        if (!Float.isFinite(x) || !Float.isFinite(y) || !Float.isFinite(radius)
+                || radius <= 0 || !Float.isFinite(deadZone)) return 0;
+        deadZone = Math.max(.08f, Math.min(.40f, deadZone));
+        if (x*x + y*y < radius*radius*deadZone*deadZone) return 0;
         float ax = Math.abs(x), ay = Math.abs(y);
         int mask = 0;
         if (ax > ay * 0.414214f) mask |= x < 0 ? LEFT : RIGHT;

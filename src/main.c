@@ -50,6 +50,7 @@
 #ifdef __ANDROID__
 #include "platform/android/android_video.h"
 #include "platform/android/android_pacing.h"
+#include "platform/android/android_runtime.h"
 #include "config.h"
 #endif
 #if defined(RECOMP_LAUNCHER)
@@ -85,10 +86,14 @@ static void SmAfterConfig(void) {
    * 60 Hz wait. Prefer Android's modern output with SDL's ordered fallback.
    * These also migrate alpha1's saved defaults without touching save files. */
   SDL_SetHint(SDL_HINT_AUDIODRIVER, "aaudio,openslES,android");
+  SDL_SetHint(SDL_HINT_ANDROID_BLOCK_ON_PAUSE, "0");
+  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
   g_config.vsync = kSnesVSync_Off;
   g_config.disable_frame_delay = false;
   g_config.audio_freq = 48000;
-  g_config.audio_samples = 2048;
+  if (g_config.audio_samples != 512 && g_config.audio_samples != 1024 &&
+      g_config.audio_samples != 4096) g_config.audio_samples = 2048;
+  g_config.linear_filtering = false;
   g_config.run_ahead = 0;
 #endif
   if (!SmVideoLoad(&g_sm_video, kSmVideoConfig))
@@ -143,8 +148,18 @@ static int SmKeepPacingDebt(void) {
 static void SmPrepareFrame(int drawable_w, int drawable_h, int *frame_w, int *frame_h) {
 #ifdef __ANDROID__
   SmAndroidApplyVideo(&g_sm_video);
+  int edges[4]; SmAndroidSafeInsets(drawable_w, drawable_h, edges);
+  drawable_w -= edges[0] + edges[2]; drawable_h -= edges[1] + edges[3];
 #endif
-  g_sm_viewport = SmCalculateViewport(&g_sm_video, drawable_w, drawable_h);
+  SmVideoSettings frame_settings = g_sm_video;
+#ifdef __ANDROID__
+  /* Door loaders, menus and cinematics use their unmodified SNES field in
+   * safe mode. Viewport changes happen at frame boundaries, never by moving
+   * Samus, changing camera RAM or activating enemies beyond the screen. */
+  unsigned state = g_ram[0x998] | g_ram[0x999] << 8;
+  if (SmAndroidSafeWide() && state != 8) frame_settings.enhanced = false;
+#endif
+  g_sm_viewport = SmCalculateViewport(&frame_settings, drawable_w, drawable_h);
   *frame_w = g_sm_viewport.width;
   *frame_h = SM_HEIGHT;
 }
@@ -153,8 +168,23 @@ static void SmComputeViewport(int frame_w, int frame_h, int w, int h,
                                SnesDisplayViewport *out) {
   (void)frame_w;
   (void)frame_h;
+  int left = 0, top = 0;
+#ifdef __ANDROID__
+  int edges[4]; SmAndroidSafeInsets(w, h, edges);
+  left = edges[0]; top = edges[1]; w -= edges[0] + edges[2]; h -= edges[1] + edges[3];
+#endif
   SmRect rect = SmDestination(g_sm_viewport, w, h);
-  *out = (SnesDisplayViewport){rect.x, rect.y, rect.w, rect.h};
+#ifdef __ANDROID__
+  if (SmAndroidIntegerScale()) {
+    int scale = rect.h / SM_HEIGHT;
+    if (scale > 0) {
+      rect.h = SM_HEIGHT * scale;
+      rect.w = (int)(rect.h * g_sm_viewport.aspect + .5);
+      rect.x = (w - rect.w) / 2; rect.y = (h - rect.h) / 2;
+    }
+  }
+#endif
+  *out = (SnesDisplayViewport){rect.x + left, rect.y + top, rect.w, rect.h};
 }
 
 /* Simulation owns these: the renderer's per-frame capture runs exactly once
@@ -176,6 +206,10 @@ static int SmDrawFrame(uint8_t *dst, size_t pitch, const uint8_t *field,
                        int frame_w, int frame_h, double alpha) {
   if (!SmCustomRendererEnabled())
     return 0;
+#ifdef __ANDROID__
+  if (SmAndroidSafeWide() && !g_sm_viewport.enhanced) return 0;
+  alpha = 1; /* Repeated/discarded presents never interpolate game movement. */
+#endif
   if (!SmRendererDraw(g_sm_output, g_sm_viewport, g_sm_video.hud_anchored, alpha)) {
     memset(g_sm_output, 0, sizeof(g_sm_output));
     for (int y = 0; y < SM_HEIGHT; ++y)
@@ -194,7 +228,7 @@ static double SmPresentationHzHook(double display_refresh) {
   /* Also avoids a blocking swap when the optional wide renderer is off.
    * Skip redundant compositions while repaying a small scheduling delay. */
   (void)display_refresh;
-  return SM_SIMULATION_HZ;
+  return SmAndroidPresentationFps() == 30 ? 30 : SM_SIMULATION_HZ;
 #else
   if (!SmCustomRendererEnabled() || !g_sm_video.fps_enabled)
     return 0;
@@ -221,6 +255,7 @@ static void SmCloseAudioProbe(void) {
 }
 static void SmAfterRunFrame(const SnesDesktopHostFrameStats *st) {
 #ifdef __ANDROID__
+  SmAndroidNoteFrame(st->guest_seconds, st->run_seconds, st->audio_output_rate);
   unsigned state = g_ram[0x998] | g_ram[0x999] << 8;
   if (!g_android_pacing.started && st->frame > 1)
     g_android_pacing = (SmAndroidPacing){st->run_seconds, true};

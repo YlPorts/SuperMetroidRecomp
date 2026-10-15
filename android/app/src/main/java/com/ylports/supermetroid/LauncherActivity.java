@@ -23,10 +23,14 @@ public final class LauncherActivity extends Activity {
     private Button play, importButton;
     private TextView status;
     private boolean importing;
+    private boolean autoStarted;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state); settings = new AppSettings(this); PhoneUi.immersive(this);
+        if (settings.rom().isFile() && settings.rom().length() == RomImporter.ROM_SIZE && BuildConfig.ENGINE_COMPILED) {
+            autoStarted=true; launchGame(); return;
+        }
         LinearLayout outer = new LinearLayout(this); outer.setGravity(Gravity.CENTER);
         outer.setBackgroundColor(PhoneUi.BACKGROUND);
         outer.setOnApplyWindowInsetsListener((v, insets) -> {
@@ -93,6 +97,7 @@ public final class LauncherActivity extends Activity {
                 if (isFinishing() || isDestroyed()) return;
                 importing = false; refresh();
                 if (message != null) error(message);
+                else if(BuildConfig.ENGINE_COMPILED) { autoStarted=true; launchGame(); }
             });
         });
     }
@@ -100,6 +105,7 @@ public final class LauncherActivity extends Activity {
         try {
             settings.prepareGame();
             startActivity(new Intent(this, GameActivity.class));
+            finish();
         } catch (IOException e) { error(e.getMessage()); }
     }
     private void error(String text) { new AlertDialog.Builder(this).setTitle("Super Metroid").setMessage(text).setPositiveButton("Entendido", null).show(); }

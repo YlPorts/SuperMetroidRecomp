@@ -1,0 +1,56 @@
+name: Android ARM64 playable release
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: '2'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
+      - name: Fetch owner's private build input and signing identity
+        env:
+          SM_ROM_URL: ${{ secrets.SM_ROM_URL }}
+          SM_KEYSTORE_BASE64: ${{ secrets.SM_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$SM_ROM_URL" || { echo 'Missing secret SM_ROM_URL (private original ROM download URL).'; exit 1; }
+          test -n "$SM_KEYSTORE_BASE64" || { echo 'Missing secret SM_KEYSTORE_BASE64 (original private signing key).'; exit 1; }
+          umask 077
+          curl --fail --location --retry 3 --silent --show-error "$SM_ROM_URL" -o "$RUNNER_TEMP/supermetroid.sfc"
+          printf '%s' "$SM_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/supermetroid.jks"
+          python3 snesrecomp/tools/rom_identity.py rom_identity.txt --help > /dev/null
+      - name: Recompile, test and build the actual game
+        env:
+          SM_ANDROID_KEYSTORE: ${{ runner.temp }}/supermetroid.jks
+          SM_ANDROID_STORE_PASSWORD: ${{ secrets.SM_ANDROID_STORE_PASSWORD }}
+          SM_ANDROID_KEY_PASSWORD: ${{ secrets.SM_ANDROID_KEY_PASSWORD }}
+          SM_ANDROID_KEY_ALIAS: supermetroid
+        run: |
+          bash android/fetch_sdl.sh
+          bash android/test-native.sh
+          bash android/build-port.sh "$RUNNER_TEMP/supermetroid.sfc"
+          python3 android/verify-apk.py android/app/build/outputs/apk/release/app-release.apk --sdk "$ANDROID_HOME"
+      - name: Publish APK and validation
+        uses: actions/upload-artifact@v4
+        with:
+          name: SuperMetroid-0.2.0-arm64-${{ github.run_number }}
+          retention-days: 90
+          path: |
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/apk/release/output-metadata.json
+      - name: Remove private inputs
+        if: always()
+        run: rm -f "$RUNNER_TEMP/supermetroid.sfc" "$RUNNER_TEMP/supermetroid.jks"

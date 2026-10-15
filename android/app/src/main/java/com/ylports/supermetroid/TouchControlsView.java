@@ -16,11 +16,14 @@ import java.util.Map;
 
 /** Draws only on input/layout changes; retains no animation loop over gameplay. */
 final class TouchControlsView extends View {
-    interface Host { void keys(int pressed, int released); void menu(); void editDone(); }
+    interface Host { void keys(int pressed, int released); void menu(); void editDone(); void editControl(String id);
+        void safeArea(int left,int top,int right,int bottom); }
+    static final String[] CONTROL_IDS={"pad","b","y","a","x","l","r","select","start","menu"};
     private static final int PAD = -1, MENU = -2;
     private static final class Control {
         final String id; final int mask; final float defaultX, defaultY, factor;
-        float x, y, radius;
+        float x, y, radius, hit, deadZone;
+        int alpha;
         Control(String id, int mask, float x, float y, float factor) {
             this.id=id; this.mask=mask;
             defaultX=x; defaultY=y; this.factor=factor;
@@ -40,7 +43,7 @@ final class TouchControlsView extends View {
     private boolean vibration;
     private Control dragged;
     private int dragPointer = -1;
-    private float dragDx, dragDy, safeLeft, safeTop, safeRight, safeBottom;
+    private float dragDx, dragDy, downX, downY, safeLeft, safeTop, safeRight, safeBottom;
 
     TouchControlsView(Context context, AppSettings settings, Host host) {
         super(context); this.settings=settings; this.host=host;
@@ -69,17 +72,25 @@ final class TouchControlsView extends View {
                 safeRight=insets.getDisplayCutout().getSafeInsetRight();
                 safeBottom=insets.getDisplayCutout().getSafeInsetBottom();
             }
+            if(android.os.Build.VERSION.SDK_INT>=30) {
+                int types=android.view.WindowInsets.Type.displayCutout()|android.view.WindowInsets.Type.systemGestures();
+                if(!settings.fullscreen()) types|=android.view.WindowInsets.Type.systemBars();
+                android.graphics.Insets edges=insets.getInsets(types);
+                safeLeft=Math.max(safeLeft,edges.left); safeTop=Math.max(safeTop,edges.top);
+                safeRight=Math.max(safeRight,edges.right); safeBottom=Math.max(safeBottom,edges.bottom);
+            }
+            host.safeArea((int)safeLeft,(int)safeTop,(int)safeRight,(int)safeBottom);
             layoutControls(); return insets;
         });
     }
-    void reload() { layoutControls(); }
+    void reload() { releaseAll(); layoutControls(); }
     void hideForGamepad(boolean hide) { hidden=hide; releaseAll(); invalidate(); }
-    void releaseAll() { owners.clear(); padPointer=-1; input.clear(); }
+    void releaseAll() { owners.clear(); padPointer=-1; input.clear(); dragged=null; dragPointer=-1; }
     void edit(boolean enabled) { releaseAll(); editing=enabled; dragged=null; dragPointer=-1; invalidate(); }
     boolean isEditing() { return editing; }
     void resetLayout() {
         android.content.SharedPreferences.Editor e = settings.prefs.edit();
-        for (Control c:controls) { e.remove(c.id+".x"); e.remove(c.id+".y"); }
+        for (Control c:controls) for(String key:new String[]{"x","y","scale","opacity","hit","deadZone"}) e.remove(c.id+"."+key);
         e.commit(); layoutControls();
     }
     @Override protected void onSizeChanged(int w,int h,int oldw,int oldh) { releaseAll(); layoutControls(); }
@@ -93,9 +104,12 @@ final class TouchControlsView extends View {
         if (usable.width()<=0 || usable.height()<=0) return;
         float base=clamp(usable.height()*.088f,26*density(),36*density())*settings.size()/100f;
         for(Control c:controls) {
-            c.radius=c.mask==MENU ? 22*density() : base*c.factor;
+            c.radius=(c.mask==MENU ? 22*density() : base*c.factor)*settings.controlValue(c.id,"scale",1,.6f,1.6f);
             c.radius=Math.min(c.radius, usable.height()*.24f);
-            float fx=settings.prefs.getFloat(c.id+".x",c.defaultX), fy=settings.prefs.getFloat(c.id+".y",c.defaultY);
+            c.hit=settings.controlValue(c.id,"hit",1.12f,.8f,1.4f);
+            c.deadZone=settings.controlValue(c.id,"deadZone",.21f,.08f,.4f);
+            c.alpha=Math.round(settings.controlValue(c.id,"opacity",settings.opacity()/100f,.2f,.9f)*255);
+            float fx=settings.controlValue(c.id,"x",c.defaultX,0,1), fy=settings.controlValue(c.id,"y",c.defaultY,0,1);
             c.x=clamp(usable.left+fx*usable.width(),usable.left+c.radius,usable.right-c.radius);
             c.y=clamp(usable.top+fy*usable.height(),usable.top+c.radius,usable.bottom-c.radius);
         }
@@ -106,9 +120,9 @@ final class TouchControlsView extends View {
         for(Control c:controls) {
             if(hidden&&!editing&&c.mask!=MENU) continue;
             float dx=x-c.x,dy=y-c.y;
-            float targetRadius=Math.max(c.radius,20*density());
+            float targetRadius=c.radius*c.hit;
             float ratio=(dx*dx+dy*dy)/(targetRadius*targetRadius);
-            if(ratio<1.45f && ratio<distance) { best=c; distance=ratio; }
+            if(ratio<1 && ratio<distance) { best=c; distance=ratio; }
         }
         return best;
     }
@@ -134,7 +148,7 @@ final class TouchControlsView extends View {
             if((action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_POINTER_UP)&&i==index) continue;
             Control c=owners.get(pointer);
             if(c==null||c.mask==MENU) continue;
-            if(c.mask==PAD) input.pointer(pointer,TouchInput.direction(event.getX(i)-c.x,event.getY(i)-c.y,c.radius));
+            if(c.mask==PAD) input.pointer(pointer,TouchInput.direction(event.getX(i)-c.x,event.getY(i)-c.y,c.radius,c.deadZone));
             else {
                 // A captured face-button finger may slide between buttons, but
                 // never acquire the d-pad or open a menu halfway through a press.
@@ -149,6 +163,7 @@ final class TouchControlsView extends View {
             Control c=hit(event.getX(index),event.getY(index));
             if(c!=null&&c.mask==MENU) { performClick(); host.editDone(); return true; }
             dragged=c; dragPointer=id;
+            downX=event.getX(index); downY=event.getY(index);
             if(c!=null) { dragDx=c.x-event.getX(index); dragDy=c.y-event.getY(index); }
         } else if(action==MotionEvent.ACTION_MOVE&&dragged!=null) {
             int i=event.findPointerIndex(dragPointer);
@@ -158,10 +173,13 @@ final class TouchControlsView extends View {
                 invalidate();
             }
         } else if((action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_POINTER_UP)&&id==dragPointer) {
-            if(dragged!=null) settings.prefs.edit()
+            Control selected=dragged;
+            boolean tapped=Math.hypot(event.getX(index)-downX,event.getY(index)-downY)<6*density();
+            if(dragged!=null&&!tapped) settings.prefs.edit()
                     .putFloat(dragged.id+".x",(dragged.x-usable.left)/usable.width())
                     .putFloat(dragged.id+".y",(dragged.y-usable.top)/usable.height()).commit();
             dragged=null; dragPointer=-1;
+            if(selected!=null&&tapped) host.editControl(selected.id);
         }
         return true;
     }
@@ -171,13 +189,17 @@ final class TouchControlsView extends View {
         if(editing) {
             canvas.drawColor(0x85070B10);
             paint.setColor(Color.WHITE); paint.setTextSize(14*density()); paint.setTextAlign(Paint.Align.CENTER);
-            canvas.drawText("Arrastra los botones · toca ✓ para jugar",getWidth()*.5f,getHeight()*.25f,paint);
+            canvas.drawText("Arrastra para mover · toca para ajustar · ✓ para jugar",getWidth()*.5f,getHeight()*.20f,paint);
         }
         for(Control c:controls) {
             if(hidden&&!editing&&c.mask!=MENU) continue;
+            if(editing) {
+                paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(density()); paint.setColor(0x60FFAC42);
+                canvas.drawCircle(c.x,c.y,c.radius*c.hit,paint); paint.setStyle(Paint.Style.FILL);
+            }
             if(c.mask==PAD) { drawPad(canvas,c); continue; }
             boolean pressed=c.mask>0&&(input.held()&c.mask)!=0;
-            int alpha=editing?210:controlAlpha;
+            int alpha=editing?210:c.alpha;
             paint.setStyle(Paint.Style.FILL); paint.setColor(pressed?0xFFFFAC42:0xFF09121C); paint.setAlpha(pressed?205:Math.round(alpha*.58f));
             canvas.drawCircle(c.x,c.y,c.radius,paint);
             paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth((pressed?2.4f:1.5f)*density());
@@ -185,9 +207,19 @@ final class TouchControlsView extends View {
             canvas.drawCircle(c.x,c.y,c.radius,paint);
             paint.setStrokeWidth(2.4f*density()); paint.setStrokeCap(Paint.Cap.ROUND); paint.setStrokeJoin(Paint.Join.ROUND);
             paint.setColor(pressed?0xFF0C1019:Color.WHITE); paint.setAlpha(Math.min(255,alpha+65));
-            drawIcon(canvas,c);
+            if(settings.labels()&&c.mask>0) drawLabel(canvas,c); else drawIcon(canvas,c);
             paint.setStrokeCap(Paint.Cap.BUTT); paint.setStyle(Paint.Style.FILL);
         }
+    }
+    private void drawLabel(Canvas canvas,Control c) {
+        paint.setStyle(Paint.Style.FILL); paint.setTextAlign(Paint.Align.CENTER);
+        paint.setTypeface(android.graphics.Typeface.create("sans-serif-medium",android.graphics.Typeface.BOLD));
+        paint.setTextSize(c.radius*(c.id.length()>1?.55f:.95f));
+        int color=c.mask==TouchInput.A?0xFFFF7672:c.mask==TouchInput.B?0xFFFFD477:
+                c.mask==TouchInput.X?0xFF80ACFF:c.mask==TouchInput.Y?0xFF7FDCB3:Color.WHITE;
+        paint.setColor(color); paint.setAlpha(editing?255:Math.min(255,c.alpha+70));
+        String label=c.mask==TouchInput.START?"START":c.mask==TouchInput.SELECT?"SELECT":c.id.toUpperCase(java.util.Locale.ROOT);
+        canvas.drawText(label,c.x,c.y-(paint.ascent()+paint.descent())*.5f,paint);
     }
     /** Resolution-independent strokes; no text, font lookup, bitmap or per-frame allocation. */
     private void drawIcon(Canvas canvas,Control c) {
@@ -245,14 +277,14 @@ final class TouchControlsView extends View {
     private void drawPad(Canvas canvas,Control c) {
         float r=c.radius, arm=r*.35f;
         paint.setStyle(Paint.Style.FILL); paint.setColor(0xFF0C1825);
-        paint.setAlpha(editing?210:Math.round(controlAlpha*.65f));
+        paint.setAlpha(editing?210:Math.round(c.alpha*.65f));
         canvas.drawRoundRect(c.x-arm,c.y-r,c.x+arm,c.y+r,arm*.3f,arm*.3f,paint);
         canvas.drawRoundRect(c.x-r,c.y-arm,c.x+r,c.y+arm,arm*.3f,arm*.3f,paint);
         int[] bits={TouchInput.UP,TouchInput.RIGHT,TouchInput.DOWN,TouchInput.LEFT};
         for(int i=0;i<4;i++) {
             canvas.save(); canvas.rotate(i*90,c.x,c.y);
             paint.setColor((input.held()&bits[i])!=0?PhoneUi.ACCENT:Color.WHITE);
-            paint.setAlpha(editing?230:Math.min(255,controlAlpha+55));
+            paint.setAlpha(editing?230:Math.min(255,c.alpha+55));
             path.reset(); path.moveTo(c.x,c.y-r*.82f); path.lineTo(c.x-r*.20f,c.y-r*.50f);
             path.lineTo(c.x+r*.20f,c.y-r*.50f); path.close(); canvas.drawPath(path,paint);
             canvas.restore();

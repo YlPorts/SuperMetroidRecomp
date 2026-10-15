@@ -1,0 +1,64 @@
+name: Android checks
+on:
+  push:
+    branches: [android-v0.2.0]
+  pull_request:
+    paths: ['android/**', 'src/**', 'tests/**', 'tools/**', 'CMakeLists.txt', '.github/workflows/android.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: android-checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  regressions:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: bash android/fetch_sdl.sh
+      - run: bash android/test-core.sh
+      - run: bash android/test-native.sh
+  android-buildcheck:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
+      - run: bash android/fetch_sdl.sh
+      - name: Build isolated verification app (no game code or ROM)
+        working-directory: android
+        run: ./gradlew -PandroidVerifyOnly=true -PsmAbis=arm64-v8a,x86_64 :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --no-daemon --max-workers=2
+      - name: Exercise Android multitouch and editor on API 35
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_4
+          disable-animations: true
+          script: |
+            adb install android/app/build/outputs/apk/debug/app-debug.apk
+            adb install android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            adb shell am instrument -w com.ylports.supermetroid.buildcheck.test/com.ylports.supermetroid.ControlsSmokeTest | tee controls-smoke.txt
+            grep -q 'controls_result=passed' controls-smoke.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-verification-NO-GAME-${{ github.run_number }}
+          retention-days: 30
+          path: |
+            android/app/build/outputs/apk/**
+            android/app/build/reports/lint-results-*.html
+            controls-smoke.txt

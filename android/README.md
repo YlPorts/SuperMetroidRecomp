@@ -118,3 +118,54 @@ Pruebas: captura de 1.000 cuadros de 1.257 a 22 ms (solo esa etapa); ocho
 escenas y una captura anterior conservan sus píxeles. Un replay sintético
 de 3.000 cuadros con el consumidor de audio real pasa de 56 vaciados a 0.
 Esto no mide FPS ni reproducción audible en un teléfono físico.
+
+## Versión 0.2.0
+
+La continuación parte de la Alpha 2 exacta, conservada en `android-ultrawide`.
+Tras importar la ROM, cada apertura entra directamente al juego. `≡` o Atrás
+abre el menú. En **Editar controles**, arrastra para mover y toca un botón
+para ajustar tamaño, opacidad y área táctil; la cruceta también permite
+ajustar su zona muerta. El botón ✓ termina la edición.
+
+Los ajustes tienen cuatro categorías. **Pantalla** permite 4:3, ultrawide,
+HUD en extremos, escala vertical entera y modo conservador para transiciones.
+**Audio** ofrece volumen general y búfer para el próximo inicio; conserva
+la mezcla SPC700 original. **Rendimiento** puede reducir las presentaciones
+a 30 sin cambiar la simulación SNES. El diagnóstico solo se abre a petición.
+**Exportar partida SNES** guarda la SRAM como `.srm` donde elijas. No es un
+estado de suspensión; conserva el progreso guardado según las reglas del juego.
+
+### GitHub Actions
+
+- **Android checks**: se ejecuta al publicar esta rama. Compila la aplicación
+  aislada `.buildcheck`, prueba C/JVM/lint y ejecuta MotionEvents sobre la View
+  real en Android 35. El artefacto `NO-GAME` es solo verificación.
+- **Android ARM64 playable release**: ejecución manual, genera dos veces el C
+  desde la ROM verificada y compila la APK de juego firmada. Conserva cada
+  ejecución y su artefacto hasta 90 días.
+
+Configura en GitHub → Settings → Secrets and variables → Actions:
+
+| Secreto | Contenido |
+| --- | --- |
+| `SM_ROM_URL` | URL HTTPS privada que descarga la ROM original sin cabecera de 512 bytes |
+| `SM_KEYSTORE_BASE64` | Contenido base64 de la firma original, nunca un archivo del repositorio |
+| `SM_ANDROID_STORE_PASSWORD` | Contraseña del almacén original |
+| `SM_ANDROID_KEY_PASSWORD` | Contraseña de la clave original |
+
+El alias fijado es `supermetroid`. La verificación final exige el certificado
+original; evita distribuir accidentalmente una APK con firma distinta.
+Los archivos privados se descargan al directorio temporal del runner y no
+se adjuntan como artefactos ni se incluyen en Git.
+
+Validación local adicional:
+
+```sh
+bash android/fetch_sdl.sh
+bash android/test-native.sh
+bash android/test-core.sh /ruta/SuperMetroid.sfc
+python3 android/verify-apk.py android/app/build/outputs/apk/release/app-release.apk --sdk "$ANDROID_HOME"
+```
+
+El registro de cambios y las limitaciones están en
+[`docs/releases/android-v0.2.0.md`](../docs/releases/android-v0.2.0.md).

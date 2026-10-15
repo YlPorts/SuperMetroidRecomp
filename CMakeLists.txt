@@ -209,6 +209,8 @@ if(ANDROID)
     add_library(SuperMetroidSNESRecomp SHARED ${SM_HOST_SOURCES})
     set_target_properties(SuperMetroidSNESRecomp PROPERTIES OUTPUT_NAME main)
     target_sources(SuperMetroidSNESRecomp PRIVATE src/platform/android/android_video.c)
+    target_sources(SuperMetroidSNESRecomp PRIVATE src/platform/android/android_runtime.c)
+    target_sources(SuperMetroidSNESRecomp PRIVATE src/platform/android/atomic_file.c)
     target_link_options(SuperMetroidSNESRecomp PRIVATE "-Wl,-z,max-page-size=16384")
 else()
     add_executable(SuperMetroidSNESRecomp ${SM_HOST_SOURCES})
@@ -253,6 +255,23 @@ endif()
 # hooks. Before 2026-09 all of it was a 2,800-line private copy of the host in
 # src/main.c, ahead of the framework's in places and behind it in others.
 snesrecomp_target_desktop_host(SuperMetroidSNESRecomp TIER2)
+if(ANDROID)
+    set(sm_android_host "${CMAKE_CURRENT_BINARY_DIR}/sm_android_host.c")
+    execute_process(COMMAND ${Python3_EXECUTABLE}
+        "${CMAKE_CURRENT_SOURCE_DIR}/tools/patch_android_host.py"
+        "${SNESRECOMP_ROOT}/runner/src/desktop/host_main.c" "${sm_android_host}"
+        RESULT_VARIABLE sm_patch_result)
+    if(NOT sm_patch_result EQUAL 0)
+        message(FATAL_ERROR "Android lifecycle hooks do not match the pinned framework")
+    endif()
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/tools/patch_android_host.py"
+        "${SNESRECOMP_ROOT}/runner/src/desktop/host_main.c")
+    get_target_property(sm_sources SuperMetroidSNESRecomp SOURCES)
+    list(REMOVE_ITEM sm_sources "${SNESRECOMP_ROOT}/runner/src/desktop/host_main.c")
+    set_property(TARGET SuperMetroidSNESRecomp PROPERTY SOURCES ${sm_sources})
+    target_sources(SuperMetroidSNESRecomp PRIVATE "${sm_android_host}")
+endif()
 # The recompiled banks, or the setup host when there are none and the build
 # asked for one. The release workflow builds exactly that: CI has no ROM, so
 # it cannot generate, and what it can honestly ship is a setup pack whose
