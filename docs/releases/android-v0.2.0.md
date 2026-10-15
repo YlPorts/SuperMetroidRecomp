@@ -6,6 +6,7 @@ La rama anterior y su APK permanecen intactas. No se sustituye el juego.
 
 ## Implementado
 
+- Fondo de arranque del sistema Android coherente con el tema oscuro.
 - Inicio directo al juego cuando ya hay una ROM importada y verificada; tras
   importar por primera vez también se abre el juego. El selector de Android
   sigue siendo necesario cuando todavía no hay ROM.
@@ -32,6 +33,8 @@ La rama anterior y su APK permanecen intactas. No se sustituye el juego.
 - Pausa nativa explícita: el propietario del motor procesa los comandos,
   guarda SRAM y duerme sin ejecutar el juego mientras hay un menú o la app
   está en segundo plano. La reanudación reinicia la cadencia de presentación.
+- Configuración y SRAM siguen el directorio real de la ROM importada,
+  incluido el respaldo interno si falla el volumen externo.
 - SRAM sucia revisada cada 120 cuadros. Solo se escribe si cambió; no se
   crean estados completos periódicos. Reemplazo atómico y copia `.bak`
   conservando el archivo actual hasta publicar el nuevo. Exportación `.srm`
@@ -47,12 +50,13 @@ La rama anterior y su APK permanecen intactas. No se sustituye el juego.
 
 ## Correcciones surgidas del recorrido real
 
-- La rutina `$88:D865` consume argumentos que siguen a un JSL y modifica el
-  retorno invitado. La frontera AOT anterior acababa en `$D869`, y el motor
-  registraba `unresolved-abandon` omitiendo la continuación. Se marca esa
-  frontera exacta `force_lle` para ejecutar los bytes originales con el puente
-  existente, sin descodificar los argumentos como instrucciones ni inventar
-  efectos HDMA.
+- Se localizó una frontera AOT problemática en `$88:D865`: tras el JSL hay
+  argumentos inline y el motor registra `unresolved-abandon`. Una prueba con
+  `force_lle` eliminó ese aviso pero produjo corrupción y detenciones más
+  tempranas en el recorrido largo. **Se rechazó y retiró ese cambio**: se
+  conserva la configuración de bancos original de Alpha 2. La corrección
+  profunda de ese retorno y de los fallos posteriores del puente queda
+  pendiente; no se presenta como resuelta.
 - Android aplica ahora la configuración de rebobinado del host y lo mantiene
   desactivado. Antes se reservaba un anillo de 60 estados completos (17,5 MB
   en la ejecución medida) aunque el INI decía `Enabled=0`.

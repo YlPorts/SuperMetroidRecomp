@@ -67,6 +67,30 @@ def patch(source):
       if (phone_paused && running) { SDL_Delay(8); continue; }
     }
 '''
+    storage = """    const char *storage = SDL_AndroidGetExternalStoragePath();
+    if (storage) chdir(storage);"""
+    assert source.count(storage) == 1, 'Pinned Android storage hook changed'
+    source = source.replace(storage, """    /* AppSettings may fall back to internal storage when the external
+     * volume is unavailable. getArguments always supplies its absolute ROM
+     * copy as the final argument; keep config and SRAM in that SAME parent. */
+    char phone_directory[4096];
+    const char *storage = NULL;
+    const char *rom_argument = argc > 1 ? argv[argc - 1] : NULL;
+    if (rom_argument && rom_argument[0] == '/' && strlen(rom_argument) < sizeof(phone_directory)) {
+      const char *slash = strrchr(rom_argument, '/');
+      size_t length = (size_t)(slash - rom_argument);
+      if (length > 0) {
+        memcpy(phone_directory, rom_argument, length);
+        phone_directory[length] = 0;
+        storage = phone_directory;
+      }
+    }
+    if (!storage) storage = SDL_AndroidGetExternalStoragePath();
+    if (!storage) storage = SDL_AndroidGetInternalStoragePath();
+    if (!storage || chdir(storage) != 0) {
+      fprintf(stderr, "Android data directory is unavailable.\\n");
+      return 1;
+    }""")
     source = source.replace(anchor, service + anchor)
     assert source.count('  RtlWriteSram();') == 1
     source = source.replace('  RtlWriteSram();', '  (void)SmAndroidFlushSram();')
