@@ -43,13 +43,17 @@ Se repitió el recorrido con cadencia normal y el dispositivo de audio SDL dummy
 
 La sonda de audio registró vaciados: entre los cuadros 501–1.500 no hubo nuevos; entre 1.501–2.500 hubo 7 y entre 2.501–4.000 hubo 34. El arranque también presentó vaciados. Son mediciones de este host con audio dummy y carga de compilación concurrente; no demuestran cortes audibles en el teléfono ni que el sonido esté resuelto. No se ha cambiado la velocidad de música o simulación para ocultarlos.
 
+La repetición con el mismo búfer y sin compilación local simultánea completó otros 4.000 cuadros en 69,43 segundos. Registró 7, 3 y 40 nuevos vaciados en esos mismos tres intervalos, respectivamente. Por tanto no se atribuye el problema únicamente a la carga de compilación. Sigue pendiente la escucha y medición en un dispositivo real.
+
 El emulador local sin KVM mostró ANR/reinicios de servicios y fallos FUSE. Las pruebas de View pasaron, pero ese entorno no certifica juego Android completo, rendimiento ni calidad audible.
 
 ## GitHub Actions
 
 La ejecución de comprobación del código restaurado aprobó las dos tareas: regresiones y compilación/instrumentación Android:
 
-https://github.com/YlPorts/SuperMetroidRecomp/actions/runs/38697000851
+https://github.com/YlPorts/SuperMetroidRecomp/actions/runs/38739742770
+
+Ambas tareas aprobaron sobre el código `8787b9c1712b1951de2b4f9dde711a219356ec0d`; la actualización posterior de este informe no cambia el motor ni la aplicación.
 
 El artefacto `NO-GAME` de esa ejecución es una aplicación aislada `.buildcheck`, no el juego. No debe instalarse esperando ejecutar Super Metroid.
 
